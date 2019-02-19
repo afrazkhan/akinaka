@@ -1,0 +1,89 @@
+# Akinaka
+This is a general all-purpose tool for managing things in AWS that Terraform is not responsible for -- you can think of it as an extension to the `aws` CLI.
+
+At the moment it only does two things; blue/green deploys for plugging into Gitlab, and AMI cleanups.
+
+1. [Installation](#installation)
+2. [Deploys](#deploys)
+3. [Cleanups](#cleanups)
+   - [AMIs](#amis)
+4. [Contributing](#contributing)
+
+## Installation
+
+    pip3 install git+https://gitlab.olindata.com/olindata/akinaka.git
+
+## Deploys
+Done with the `update` parent command, and then the `asg` and `targetgroup` subcommands (`update targetgroup` is only needed for blue/green deploys).
+
+Example:
+
+    # For standalone ASGs (not blue/green)
+     akinaka.py update --region eu-west-1 --role-arn --role-arn arn:aws:iam::123456789100:role/production_assumable asg --asg workers --ami ami-000000
+
+    # For blue/green ASGs
+     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --lb lb-asg-ext --ami ami-000000
+
+For blue/green deploys, the next step is to check the health of your new ASG.
+For the purposes of Gitlab CI/CD pipelines, this will be printed out as the only
+output, so that it can be used in the next job.
+
+Once the new ASG is confirmed to be working as expected:
+
+    akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --new blue
+
+The value of `--role-arn` is used to assume a role in the target account with enough
+permissions to perform the actions of modifying ASGs and Target Groups. As such,
+`akinaka` is able to do cross-account deploys. It will deliberately error if you
+do not supply an IAM Role ARN, in order to ensure you are deploying to the account
+you think you are.
+
+## Cleanups
+Currently only AMI cleanups are supported.
+
+### AMIs
+Cleans up AMIs and their snapshots based on a specified retention period, and deduced AMI usage (will
+not delete AMIs that are currently in use). You can optionally specify an AMI name pattern, and it will
+keep the latest version of all the AMIs it finds for it.
+
+Usage:
+
+    akinaka.py cleanup --region eu-west-1 \
+    --role-arns "arn:aws:iam::198765432100:role/production_assumable arn:aws:iam::123456789100:role/production_assumable" ami \
+    --exceptional-amis cib-base-image-*
+    --retention 7
+
+The above will delete all AMIs and their snapshots, _except for those which:_
+
+1. Are younger than 7 days AND
+2. Are not in use by AWS accounts "123456789100" or "198765432100" AND
+3. WHERE the AMI name matches the pattern "cib-base-image-*", there is more than one match AND it is the oldest one
+
+`--role-arns` is a space separated list of IAM ARNs that can be assumed by the token you are using
+to run this command. The AMIs for the running instances found in these accounts will not be deleted. Not to be confused with `--role-arn`, accepted for the `update` parent command, for deploys.
+
+`--exceptional-amis` is a space seperated list of exact names or patterns for which to keep the latest
+version of an AMI for. For example, the pattern "cib-base-image-*" will match with normal globbing, and
+if there is more than one match, only the latest one will not be deleted (else there is no effect).
+
+`--retention` is the retention period you want to exclude from deletion. For example; `--retention 7`
+will keep all AMIs found within 7 days, if they are not in the `--exceptional-amis` list.
+
+## Contributing
+Modules can be added easily by simply dropping them in and adding an entry into `akinaka.py` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
+
+For example, given a module called `akinaka_moo`, and a single command and file called `moo`, add these two lines in the appropriate places of `akinaka.py`:
+
+    from akinaka_moo import moo
+
+    cli.add_command(update)
+
+and the following in the module's `__init__.py`:
+
+    @click.group()
+    @click.option("--make-awesome", help="The way in which to make moo awesome")
+    def moo(make_awesome):
+        import .moo
+        # YOUR CODE USING THE MOO MODULE
+
+Adding commands that need subcommands isn't too different, but you might want to take a look at the already present examples of `update` and `cleanup`.

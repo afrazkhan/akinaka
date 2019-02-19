@@ -1,0 +1,29 @@
+import setuptools
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
+    name="akinaka",
+    python_requires='>3.0.0',
+    version="0.1.0",
+    author="Afraz",
+    author_email="afraz@olindata.com",
+    description="OlinData's aws cli Extras",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://gitlab.olindata.com/olindata/akinaka",
+    packages=setuptools.find_packages(),
+    install_requires=[
+        'boto3',
+        'datetime',
+        'click'
+    ],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: GPL3 License",
+        "Operating System :: OS Independent",
+    ],
+    scripts=['akinaka.py'],
+    zip_safe=False
+)
