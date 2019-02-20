@@ -12,11 +12,12 @@ aws_client = AWS_Client()
 
 class CleanupAMIs():
 
-    def __init__(self, region, role_arns, retention, not_dry_run, exceptional_amis=None):
+    def __init__(self, region, role_arns, retention, not_dry_run, exceptional_amis=None, launch_templates=None):
           self.region = region
           self.role_arns = role_arns
           self.retention = int(retention)
           self.exceptional_amis = exceptional_amis
+          self.launch_templates = launch_templates
           self.retention_end = (datetime.now(timezone.utc) + timedelta(days=-self.retention))
           self.not_dry_run = not_dry_run
 
@@ -78,6 +79,28 @@ class CleanupAMIs():
         
         return amis
 
+    def delist_launch_template_finds(self, amis):
+        ec2_client = aws_client.create_client('ec2', self.region, self.role_arns[0])
+
+        for launch_template in self.launch_templates:
+            latest_version = ec2_client.describe_launch_templates(
+                LaunchTemplateNames=[launch_template]
+            )['LaunchTemplates'][0]['LatestVersionNumber']
+            str(latest_version)
+            
+            # It shouldn't be possible to have no value for ImageId, but it is :D
+            try:
+                in_use_ami = ec2_client.describe_launch_template_versions(
+                    LaunchTemplateName=launch_template,
+                    Versions=[latest_version]
+                )['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
+            except:
+                in_use_ami = ""
+
+            amis.discard(in_use_ami)
+        
+        return amis
+
     def get_snapshot(self, ami):
         return self.list_amis(ids=[ami])[0]['BlockDeviceMappings'][0]['Ebs']['SnapshotId']
 
@@ -93,6 +116,7 @@ class CleanupAMIs():
         amis_to_delete = self.delist_out_of_retention_amis(self.list_amis())
         amis_to_delete = self.delist_in_use_amis(amis_to_delete)
         amis_to_delete = self.delist_latest_arbitrary_amis(amis_to_delete)
+        amis_to_delete = self.delist_launch_template_finds(amis_to_delete)
         
         if self.not_dry_run:
             print("Deleting the following AMIs and their snapshots: {}".format(amis_to_delete))
