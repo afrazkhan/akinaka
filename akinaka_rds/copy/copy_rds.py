@@ -163,7 +163,7 @@ class CopyRDS():
         )
         print("  Modified.")
 
-    def rename_or_delete_target_instance(self, instancename, rds_client, overwrite_target ):
+    def rename_or_delete_target_instance(self, rds_client, instancename, overwrite_target ):
 
         print("Checking for an existing RDS instance by the name {} and renaming or deleting if it's found".format(instancename))
         # check if we already have an instance by this name
@@ -292,8 +292,7 @@ class CopyRDS():
         # restore an instance from the specified snapshot
         print("Restoring RDS instance {} from snapshot {}".format(instancename, snapshot['DBSnapshotIdentifier']))
         try:
-            subnet_group = rds_client.describe_db_instances(DBInstanceIdentifier=instancename)['DBInstances']
-            if dbsubnet_group != subnet_group[0]['DBSubnetGroup']['DBSubnetGroupName']:
+            if dbsubnet_group is None:
                 dbsubnet_group = 'default'
 
             instance = rds_client.restore_db_instance_from_db_snapshot(
