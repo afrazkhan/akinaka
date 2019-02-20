@@ -77,7 +77,7 @@ For example, given a module called `akinaka_moo`, and a single command and file 
     from akinaka_update.commands import moo as moo_commands
     cli.add_command(moo_commands)
 
-and the following in the module's `__init__.py`:
+and the following in the module's `commands.py`:
 
     @click.group()
     @click.option("--make-awesome", help="The way in which to make moo awesome")
