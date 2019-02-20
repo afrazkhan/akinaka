@@ -20,7 +20,7 @@ class CopyRDS():
         self.db_subnet = db_subnet
         self.target_instance_name = target_instance_name
 
-    def copy_rds(self):
+    def copy_instance(self):
 
         rds_source_client   = aws_client.create_client('rds', self.region, self.source_role_arn)
         rds_target_client   = aws_client.create_client('rds', self.region, self.target_role_arn)
