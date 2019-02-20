@@ -27,6 +27,7 @@ class CopyRDS():
         kms_client          = aws_client.create_client('kms', self.region, self.source_role_arn)
         source_account      = aws_client.create_client('sts', self.region, self.source_role_arn).get_caller_identity()['Account']
         target_account      = aws_client.create_client('sts', self.region, self.target_role_arn).get_caller_identity()['Account']
+        target_account_arn  = aws_client.create_client('sts', self.region, self.source_role_arn).get_caller_identity()['Arn'].split('/boto')[0].replace(':sts::', ':iam::', 1).replace('assumed-role', 'role', 1)
 
         kms_key = self.get_kms_key(kms_client, source_account, target_account, target_account_arn)
 
