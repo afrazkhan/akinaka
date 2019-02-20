@@ -129,9 +129,9 @@ class CopyRDS():
         # unfortunately it's not possible to restore an RDS instance directly from a
         # snapshot that is shared by another account. This makes a copy local to the
         # account where we want to restore the RDS instance
-        taregt_db_snapshot_id = "{}-copy".format(shared_snapshot['DBSnapshotIdentifier'])
+        target_db_snapshot_id = "{}-copy".format(shared_snapshot['DBSnapshotIdentifier'])
 
-        print("Copying shared snaphot {} to local snapshot {}...".format(shared_snapshot['DBSnapshotArn'], taregt_db_snapshot_id))
+        print("Copying shared snaphot {} to local snapshot {}...".format(shared_snapshot['DBSnapshotArn'], target_db_snapshot_id))
 
         try:
             copy = rds_client.copy_db_snapshot(
