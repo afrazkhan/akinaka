@@ -74,9 +74,8 @@ Modules can be added easily by simply dropping them in and adding an entry into 
 
 For example, given a module called `akinaka_moo`, and a single command and file called `moo`, add these two lines in the appropriate places of `akinaka.py`:
 
-    from akinaka_moo import moo
-
-    cli.add_command(update)
+    from akinaka_update.commands import moo as moo_commands
+    cli.add_command(moo_commands)
 
 and the following in the module's `__init__.py`:
 
