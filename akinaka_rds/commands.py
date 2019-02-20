@@ -1,16 +1,16 @@
 import click
 
 @click.group()
-@click.option("--region", required=True, help="Region your resources are located in")
+@click.option("--region", envvar='AWS_DEFAULT_REGION', help="Region your resources are located in")
 
 @click.pass_context
 
-def rds(ctx, region, source_role_arn, target_role_arn):
+def rds(ctx, region):
     ctx.obj = {'region': region}
     pass
 
 
-@copy.command()
+@rds.command()
 @click.pass_context
 @click.option("--source-role-arn", required=True, help="Source role ARNs with assumable permissions")
 @click.option("--target-role-arn", required=True, help="Destination role ARNs with assumable permissions")
