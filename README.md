@@ -19,7 +19,7 @@ Done with the `update` parent command, and then the `asg` and `targetgroup` subc
 Example:
 
     # For standalone ASGs (not blue/green)
-     akinaka.py update --region eu-west-1 --role-arn --role-arn arn:aws:iam::123456789100:role/production_assumable asg --asg workers --ami ami-000000
+     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --asg workers --ami ami-000000
 
     # For blue/green ASGs
      akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --lb lb-asg-ext --ami ami-000000
