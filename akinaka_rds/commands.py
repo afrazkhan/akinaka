@@ -5,23 +5,23 @@ import click
 
 @click.pass_context
 
-def rds(ctx, region):
+def copy(ctx, region):
     ctx.obj = {'region': region}
     pass
 
 
-@rds.command()
+@copy.command()
 @click.pass_context
 @click.option("--source-role-arn", required=True, help="Source role ARNs with assumable permissions")
 @click.option("--target-role-arn", required=True, help="Destination role ARNs with assumable permissions")
 @click.option("--snapshot-style", type=click.Choice(['running_instance', 'latest_snapshot']), required=True, help="Use latest available backup or create a new snapshot")
 @click.option("--source-instance-name", required=True, help="RDS DB instance identifier")
+@click.option("--target-instance-name", required=True, default=None, help="Name of the newly created RDS instance")
 @click.option("--overwrite-target", is_flag=True, help="Specify this parameter to overwrite existing instance")
 @click.option("--target-security-group", required=True, help="RDS Security to be attached to the target RDS instance")
 @click.option("--target-db-subnet", required=True, help="RDS DB subnet to be attached to the instance")
-@click.option("--target-instance-name", default=None, help="Name of the newly created RDS instance")
 
-def copy(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_name, overwrite_target, target_security_group, target_db_subnet, target_instance_name):
+def rds(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_name, overwrite_target, target_security_group, target_db_subnet, target_instance_name):
     from .copy import copy_rds
     region = ctx.obj.get('region')
 
