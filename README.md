@@ -77,7 +77,7 @@ Perform often necessary but complex tasks with RDS.
 ### Copy
 Copy encrypted RDS instances between accounts:
 
-    akinaka.py rds --region eu-west-1 copy \
+    akinaka.py copy --region eu-west-1 rds \
         --source-role-arn arn:aws:iam::198765432100:role/production_assumable \
         --target-role-arn arn:aws:iam::123456789100:role/production_assumable \
         --snapshot-style running_instance \
@@ -85,6 +85,8 @@ Copy encrypted RDS instances between accounts:
         --target-instance-name DB_FROM_ACCOUNT_123456789100 \
         --target-security-group SECURITY_GROUP_OF_TARGET_RDS \
         --target-db-subnet SUBNET_OF_TARGET_RDS \
+
+`--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
 
 ## Contributing
 Modules can be added easily by simply dropping them in and adding an entry into `akinaka.py` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
