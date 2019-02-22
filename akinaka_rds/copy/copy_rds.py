@@ -9,15 +9,15 @@ import sys
 aws_client = AWS_Client()
 
 class CopyRDS():
-    def __init__(self, region, source_role_arn, target_role_arn, snapshot_style, db_id, overwrite_target, security_group, db_subnet, target_instance_name):
+    def __init__(self, region, source_role_arn, target_role_arn, snapshot_style, source_instance_name, overwrite_target, target_security_group, target_db_subnet, target_instance_name):
         self.region = region
         self.source_role_arn = source_role_arn
         self.target_role_arn = target_role_arn
         self.snapshot_style = snapshot_style
-        self.db_id = db_id
+        self.source_instance_name = source_instance_name
         self.overwrite_target = overwrite_target
-        self.security_group = security_group
-        self.db_subnet = db_subnet
+        self.target_security_group = target_security_group
+        self.target_db_subnet = target_db_subnet
         self.target_instance_name = target_instance_name
 
     def copy_instance(self):
@@ -36,11 +36,11 @@ class CopyRDS():
         # and then share the copy.
         # Additionally the copy needs to be re-encrypted with the Customer Managed KMS key
         if self.snapshot_style == 'running_instance':
-            snapshot = self.make_snapshot_from_running_instance(rds_source_client, self.db_id)
+            snapshot = self.make_snapshot_from_running_instance(rds_source_client, self.source_instance_name)
             self.wait_for_snapshot_to_be_ready(rds_source_client, snapshot)
         elif self.snapshot_style == 'latest_snapshot':
             # get latest snapshot from an AWS account with a given tag
-            snapshot = self.get_latest_automatic_rds_snapshots(rds_source_client, self.db_id)
+            snapshot = self.get_latest_automatic_rds_snapshots(rds_source_client, self.source_instance_name)
         else:
             raise ValueError('snapshot_style has to be running_instance or latest_snapshot, but value {} found'.format(self.snapshot_style))
 
@@ -58,11 +58,11 @@ class CopyRDS():
         target_instance = self.create_rds_instance_from_snapshot(rds_client=rds_target_client,
                                                             snapshot=target_copy,
                                                             instancename=self.target_instance_name,
-                                                            dbsubnet_group=self.db_subnet)
+                                                            dbsubnet_group=self.target_db_subnet)
 
         self.wait_for_instance_to_be_ready(rds_target_client, target_instance)
 
-        self.modify_rds_instance_security_groups(rds_client=rds_target_client, instancename=self.target_instance_name, securitygroup=self.security_group)
+        self.modify_rds_instance_security_groups(rds_client=rds_target_client, instancename=self.target_instance_name, securitygroup=self.target_security_group)
 
         print("  Finished, check instance {}!".format(self.target_instance_name))
 
@@ -225,13 +225,13 @@ class CopyRDS():
                 print("Snapshot {} in progress, {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
                 time.sleep(10)
 
-    def make_snapshot_from_running_instance(self, rds_client, db_id):
+    def make_snapshot_from_running_instance(self, rds_client, source_instance_name):
         print("Making a new snapshot from the running RDS instance")
         try:
             today = datetime.date.today()
             snapshot = rds_client.create_db_snapshot(
-                DBInstanceIdentifier=db_id,
-                DBSnapshotIdentifier="{}-{:%Y-%m-%d}".format(db_id, today),
+                DBInstanceIdentifier=source_instance_name,
+                DBSnapshotIdentifier="{}-{:%Y-%m-%d}".format(source_instance_name, today),
             )
             print("  Snapshot created.")
             return snapshot['DBSnapshot']
@@ -240,12 +240,12 @@ class CopyRDS():
             print(exception)
             sys.exit(1)
 
-    def get_latest_automatic_rds_snapshots(self, rds_client, db_id):
-        print("Getting latest (automated) snapshot from rds instance {}...".format(db_id))
+    def get_latest_automatic_rds_snapshots(self, rds_client, source_instance_name):
+        print("Getting latest (automated) snapshot from rds instance {}...".format(source_instance_name))
         # we can't query for the latest snapshot straight away, so we have to retrieve
         # a full list and go through all of them
         snapshots = rds_client.describe_db_snapshots(
-            DBInstanceIdentifier=db_id,
+            DBInstanceIdentifier=source_instance_name,
             SnapshotType='automated'
         )
 
