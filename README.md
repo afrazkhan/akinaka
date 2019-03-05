@@ -7,6 +7,7 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
 2. [Deploys](#deploys)
 3. [Cleanups](#cleanups)
    - [AMIs](#amis)
+   - [EBS Volumes](#ebs)
 4. [RDS](#rds)
    - [Copy](#copy)
 5. [Contributing](#contributing)
@@ -15,16 +16,19 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
 
     pip3 install akinaka
 
+## A Note on Role Assumption
+Akinaka uses IAM roles to gain access into multiple accounts. Most commands require you to specify a list of roles you wish to perform a task for, and that role must have the [sts:AssumeRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_enable-create.html) permission. This is not only good security, it's helpful for ensuring you're doing things to the accounts you think you're doing things for ;)
+
 ## Deploys
 Done with the `update` parent command, and then the `asg` and `targetgroup` subcommands (`update targetgroup` is only needed for blue/green deploys).
 
 Example:
 
     # For standalone ASGs (not blue/green)
-     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --asg workers --ami ami-000000
+     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --asg workers --ami ami-000000
 
     # For blue/green ASGs
-     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --lb lb-asg-ext --ami ami-000000
+     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --lb lb-asg-ext --ami ami-000000
 
 For blue/green deploys, the next step is to check the health of your new ASG.
 For the purposes of Gitlab CI/CD pipelines, this will be printed out as the only
@@ -32,7 +36,7 @@ output, so that it can be used in the next job.
 
 Once the new ASG is confirmed to be working as expected:
 
-    akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/production_assumable asg --new blue
+    akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --new blue
 
 The value of `--role-arn` is used to assume a role in the target account with enough
 permissions to perform the actions of modifying ASGs and Target Groups. As such,
@@ -41,7 +45,12 @@ do not supply an IAM Role ARN, in order to ensure you are deploying to the accou
 you think you are.
 
 ## Cleanups
-Currently only AMI cleanups are supported.
+Currently AMI and EBS cleanups are supported.
+
+Common option:
+
+`--role-arns` is a space separated list of IAM ARNs that can be assumed by the token you are using
+to run this command. The AMIs for the running instances found in these accounts will not be deleted. Not to be confused with `--role-arn`, accepted for the `update` parent command, for deploys.
 
 ### AMIs
 Cleans up AMIs and their snapshots based on a specified retention period, and deduced AMI usage (will
@@ -50,19 +59,18 @@ keep the latest version of all the AMIs it finds for it.
 
 Usage:
 
-    akinaka.py cleanup --region eu-west-1 \
-    --role-arns "arn:aws:iam::198765432100:role/production_assumable arn:aws:iam::123456789100:role/production_assumable" ami \
-    --exceptional-amis cib-base-image-*
-    --retention 7
+    akinaka.py cleanup \
+        --region eu-west-1 \
+        --role-arns "arn:aws:iam::198765432100:role/management_assumable arn:aws:iam::123456789100:role/management_assumable" \
+        ami \
+            --exceptional-amis cib-base-image-*
+            --retention 7
 
 The above will delete all AMIs and their snapshots, _except for those which:_
 
 1. Are younger than 7 days AND
 2. Are not in use by AWS accounts "123456789100" or "198765432100" AND
 3. WHERE the AMI name matches the pattern "cib-base-image-*", there is more than one match AND it is the oldest one
-
-`--role-arns` is a space separated list of IAM ARNs that can be assumed by the token you are using
-to run this command. The AMIs for the running instances found in these accounts will not be deleted. Not to be confused with `--role-arn`, accepted for the `update` parent command, for deploys.
 
 `--exceptional-amis` is a space seperated list of exact names or patterns for which to keep the latest
 version of an AMI for. For example, the pattern "cib-base-image-*" will match with normal globbing, and
@@ -71,20 +79,29 @@ if there is more than one match, only the latest one will not be deleted (else t
 `--retention` is the retention period you want to exclude from deletion. For example; `--retention 7`
 will keep all AMIs found within 7 days, if they are not in the `--exceptional-amis` list.
 
+### EBS Volumes
+Delete all EBS volumes that are not attached to an instance (stopped or not):
+
+    akinaka.py cleanup \
+        --region eu-west-1 \
+        --role-arns "arn:aws:iam::198765432100:role/management_assumable arn:aws:iam::123456789100:role/management_assumable" \
+        ebs
+
 ## RDS
 Perform often necessary but complex tasks with RDS.
 
 ### Copy
 Copy encrypted RDS instances between accounts:
 
-    akinaka.py copy --region eu-west-1 rds \
-        --source-role-arn arn:aws:iam::198765432100:role/production_assumable \
-        --target-role-arn arn:aws:iam::123456789100:role/production_assumable \
-        --snapshot-style running_instance \
-        --source-instance-name DB_FROM_ACCOUNT_198765432100 \
-        --target-instance-name DB_FROM_ACCOUNT_123456789100 \
-        --target-security-group SECURITY_GROUP_OF_TARGET_RDS \
-        --target-db-subnet SUBNET_OF_TARGET_RDS \
+    akinaka.py copy --region eu-west-1 \
+        rds \
+            --source-role-arn arn:aws:iam::198765432100:role/management_assumable \
+            --target-role-arn arn:aws:iam::123456789100:role/management_assumable \
+            --snapshot-style running_instance \
+            --source-instance-name DB_FROM_ACCOUNT_198765432100 \
+            --target-instance-name DB_FROM_ACCOUNT_123456789100 \
+            --target-security-group SECURITY_GROUP_OF_TARGET_RDS \
+            --target-db-subnet SUBNET_OF_TARGET_RDS \
 
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
 
