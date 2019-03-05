@@ -13,7 +13,7 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
 
 ## Installation
 
-    pip3 install git+https://gitlab.olindata.com/olindata/akinaka.git
+    pip3 install akinaka
 
 ## Deploys
 Done with the `update` parent command, and then the `asg` and `targetgroup` subcommands (`update targetgroup` is only needed for blue/green deploys).
