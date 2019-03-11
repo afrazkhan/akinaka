@@ -46,9 +46,10 @@ def reset(ctx):
 @update.command()
 @click.pass_context
 @click.option("--ami", required=True, help="Update ASG to this AMI")
-@click.option("--lb", help="Loadbalancer to work out targetgroup from -- mutually exclusive with --asg")
-@click.option("--asg", "asg_name", help="ASG we're updating -- mutually exclusive with --lb")
-def asg(ctx, ami, lb, asg_name):
+@click.option("--lb", help="Loadbalancer to work out targetgroup from -- mutually exclusive with --asg and --target-group")
+@click.option("--target-group", "target_group", help="Target Group to discover the ASG for updating. Mutually exclusive with --asg and --lb")
+@click.option("--asg", "asg_name", help="ASG we're updating -- mutually exclusive with --lb and --target-group")
+def asg(ctx, ami, lb, asg_name, target_group):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
 
@@ -60,7 +61,7 @@ def asg(ctx, ami, lb, asg_name):
     if lb:
         set_deploy_status("start", region, role_arn)
 
-    asg = update_asg.ASG(ami, region, role_arn, lb, asg_name)
+    asg = update_asg.ASG(ami, region, role_arn, lb, asg_name, target_group)
     asg.do_update()
     exit(0)
 
