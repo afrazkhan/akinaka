@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="akinaka",
     python_requires='>3.0.0',
-    version="0.2.1",
+    version="0.2.2",
     author="Afraz",
     author_email="afraz@olindata.com",
     description="OlinData's aws cli Extras",
