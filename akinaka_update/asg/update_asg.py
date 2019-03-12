@@ -15,6 +15,7 @@ class ASG():
         self.target_group = target_group
 
     def do_update(self):
+        target_groups = None
         new_ami = self.ami
 
         if self.asg is not None:
