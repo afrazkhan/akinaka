@@ -5,7 +5,7 @@ from time import gmtime, strftime
 
 class AWS_Client():
 
-    def create_client(self, service, region, role_arn):
+    def create_client(self, service, region, role_arn, valid_for=None):
         client_options = {
             'region_name': region
         }
@@ -15,7 +15,7 @@ class AWS_Client():
         credentials = sts_client.assume_role(
             RoleArn=role_arn,
             RoleSessionName="gitlab-{}".format(strftime("%Y%m%d%H%M%S", gmtime())),
-            DurationSeconds=900
+            DurationSeconds=valid_for or 900
         )
 
         client_options['aws_access_key_id'] = credentials['Credentials']['AccessKeyId']
