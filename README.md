@@ -25,10 +25,28 @@ Done with the `update` parent command, and then the `asg` and `targetgroup` subc
 Example:
 
     # For standalone ASGs (not blue/green)
-     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --asg workers --ami ami-000000
+    akinaka.py update \
+      --region eu-west-1 \
+      --role-arn arn:aws:iam::123456789100:role/management_assumable \
+    asg \
+      --asg workers \
+      --ami ami-000000
 
     # For blue/green ASGs
-     akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --lb lb-asg-ext --ami ami-000000
+    akinaka.py update \
+      --region eu-west-1 \
+      --role-arn arn:aws:iam::123456789100:role/management_assumable \
+    asg \
+      --lb lb-asg-ext \
+      --ami ami-000000
+
+    # For blue/green ASGs with multiple Target Groups behind the same ALB
+    akinaka.py update \
+      --region eu-west-1 \
+      --role-arn arn:aws:iam::123456789100:role/management_assumable \
+    asg \
+      --target-group application-1a \
+      --ami ami-000000
 
 For blue/green deploys, the next step is to check the health of your new ASG.
 For the purposes of Gitlab CI/CD pipelines, this will be printed out as the only
