@@ -10,7 +10,8 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
    - [EBS Volumes](#ebs)
 4. [RDS](#rds)
    - [Copy](#copy)
-5. [Contributing](#contributing)
+5. [Billing][#billing]
+6. [Contributing](#contributing)
 
 ## Installation
 
@@ -122,6 +123,27 @@ Copy encrypted RDS instances between accounts:
             --target-db-subnet SUBNET_OF_TARGET_RDS \
 
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
+
+### Billing
+Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
+
+    akinaka.py billing --region us-east-1 \
+      --role-arn arn:aws:iam::1234567890:role/billing_assumerole \
+      estimate --days-ago 1
+
+Example output:
+
+    Today's estimated bill
+    +------------+-----------+
+    | Date       | Total     |
+    |------------+-----------|
+    | 2019-03-14 | USD 13.93 |
+    +------------+-----------+
+
+You can specify any integer value to the `--days-ago` flag. It's optional. Default value set for today (current day).
+
+You can specify any region to the `--region` flag.
+
 
 ## Contributing
 Modules can be added easily by simply dropping them in and adding an entry into `akinaka.py` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
