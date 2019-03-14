@@ -9,8 +9,8 @@ class CostExplorer():
     def __init__(self, region, role_arn):
         self.costexplorer_client = aws_client.create_client('ce', region, role_arn)
 
-    def get_bill_estimates(self, from_days_ago=None):
-        days_ago = None or int(from_days_ago)
+    def get_bill_estimates(self, from_days_ago):
+        days_ago = 0 or int(from_days_ago)
         if days_ago > 0:
             end = datetime.now().strftime("%Y-%m-%d")
             datetime_days_ago = datetime.now() - timedelta(days=days_ago)

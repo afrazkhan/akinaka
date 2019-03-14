@@ -12,11 +12,11 @@ def billing(ctx, region, role_arn):
 
 @billing.command()
 @click.pass_context
-@click.option("--days-ago", "from_days_ago", help="Number of days ago.")
-def estimate(ctx, from_days_ago):
+@click.option("--days-ago", "days_ago", default=0, help="Number of days ago.")
+def estimate(ctx, days_ago):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
 
     from .billing_summary import billing_queries
-    billing_queries.BillingQueries(region, role_arn, from_days_ago).print_x_days_estimates()
+    billing_queries.BillingQueries(region, role_arn, days_ago).print_x_days_estimates()
     

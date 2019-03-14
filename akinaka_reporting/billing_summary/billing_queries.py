@@ -7,7 +7,7 @@ import sys
 import tabulate
 
 class BillingQueries():
-    def __init__(self, region, assume_role_arn, days_ago=0):
+    def __init__(self, region, assume_role_arn, days_ago):
         self.costexplorer = akinaka_libs.costexplorer.CostExplorer(region, assume_role_arn)
         self.days_ago = days_ago
 
