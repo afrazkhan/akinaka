@@ -28,7 +28,7 @@ Previous estimate ({}): {}
 
     def print_x_days_estimates(self):
         try:
-            response = self.costexplorer.get_bill_estimates(from_days_ago=3)
+            response = self.costexplorer.get_bill_estimates(from_days_ago=0)
             data = response['ResultsByTime']
         except Exception as e:
             print("Billing estimates is not available: {}".format(e))
