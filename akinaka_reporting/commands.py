@@ -17,5 +17,5 @@ def estimate(ctx):
     role_arn = ctx.obj.get('role_arn')
 
     from .billing_summary import billing_queries
-    billing_queries.BillingQueries(region, role_arn).print_last_two_estimates()
+    billing_queries.BillingQueries(region, role_arn).print_x_days_estimates()
     
