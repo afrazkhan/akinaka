@@ -5,6 +5,7 @@ import click
 
 @click.pass_context
 
+# This is the Click() group that's imported into the CLI at the top level
 def copy(ctx, region):
     ctx.obj = {'region': region}
     pass
@@ -20,7 +21,6 @@ def copy(ctx, region):
 @click.option("--overwrite-target", is_flag=True, help="Specify this parameter to overwrite existing instance")
 @click.option("--target-security-group", required=True, help="RDS Security to be attached to the target RDS instance")
 @click.option("--target-db-subnet", required=True, help="RDS DB subnet to be attached to the instance")
-
 def rds(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_name, overwrite_target, target_security_group, target_db_subnet, target_instance_name):
     from .copy import copy_rds
     region = ctx.obj.get('region')
