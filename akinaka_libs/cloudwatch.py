@@ -5,31 +5,6 @@ from datetime import datetime, timezone
 
 aws_client = AWS_Client()
 
-# aws --region us-east-1 cloudwatch get-metric-statistics \
-#   --namespace "AWS/Billing" \
-#   --metric-name "EstimatedCharges" \
-#   --dimension "Name=Currency,Value=USD" \
-#   --start-time 2019-03-12T13:29:00 \
-#   --end-time 2019-03-13T13:29:00 \
-#   --statistic Maximum \
-#   --seconds_ago 60 \
-#   --output text | sort -r -k 3 | head -n 1 | cut -f 2
-#
-#  max_estimated_charge_before_last_12_hour=$(aws --region us-east-1 cloudwatch get-metric-statistics \
-#  --namespace "AWS/Billing" \
-#  --metric-name "EstimatedCharges" \
-#  --dimension "Name=Currency,Value=USD" \
-#  --start-time $(date +"%Y-%m-%dT%H:%M:00" \
-#  --date="-24 hours") \
-#  --end-time $(date +"%Y-%m-%dT%H:%M:00" --date="-12 hours") \
-#  --statistic Maximum \
-#  --seconds_ago 60 \
-#  --output text | sort -r -k 3 | head -n 1 | cut -f 2)
-#
-# bill=$(echo "$max_estimated_charge_12_hour $max_estimated_charge_before_last_12_hour" | awk '{print $1-$2}')
-
-
-
 class CloudWatch():
     def __init__(self, region, role_arn):
         self.cloudwatch_client = aws_client.create_client('cloudwatch', region, role_arn)
