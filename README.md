@@ -10,7 +10,8 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
    - [EBS Volumes](#ebs)
 4. [RDS](#rds)
    - [Copy](#copy)
-5. [Billing][#billing]
+5. [Reporting](#reporting)
+   - [Billing](#billing)
 6. [Contributing](#contributing)
 
 ## Installation
@@ -127,9 +128,9 @@ Copy encrypted RDS instances between accounts:
 ### Billing
 Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
 
-    akinaka.py billing --region us-east-1 \
+    akinaka.py reporting --region us-east-1 \
       --role-arn arn:aws:iam::1234567890:role/billing_assumerole \
-      estimate --days-ago 1
+      bill-estimates --from-days-ago 1
 
 Example output:
 
