@@ -7,17 +7,17 @@ import sys
 import tabulate
 
 class BillingQueries():
-    def __init__(self, region, assume_role_arn, days_ago):
+    def __init__(self, region, assume_role_arn):
         self.costexplorer = akinaka_libs.costexplorer.CostExplorer(region, assume_role_arn)
-        self.days_ago = days_ago
 
-    def print_x_days_estimates(self):
+    def days_estimates(self, from_days_ago):
         try:
-            response = self.costexplorer.get_bill_estimates(from_days_ago=self.days_ago)
+            response = self.costexplorer.get_bill_estimates(from_days_ago)
             data = response['ResultsByTime']
         except Exception as e:
             print("Billing estimates is not available: {}".format(e))
             return e
+        
         results = []
         if len(data) == 1:
             amount = float(data[0]['Total']['UnblendedCost']['Amount'])
@@ -31,7 +31,9 @@ class BillingQueries():
                 amount = float(d['Total']['UnblendedCost']['Amount'])
                 results.append([d['TimePeriod']['End'], "{} {:.2f}".format(unit, amount)])
             message = "\nEstimated bill for the past {} days\n".format(str(len(data)))
+        
         message += tabulate.tabulate(results, headers=["Date", "Total"], tablefmt='psql')
         message += "\n"
+
         print(message)
         return message

@@ -11,6 +11,7 @@ class CostExplorer():
 
     def get_bill_estimates(self, from_days_ago):
         days_ago = 0 or int(from_days_ago)
+        
         if days_ago > 0:
             end = datetime.now().strftime("%Y-%m-%d")
             datetime_days_ago = datetime.now() - timedelta(days=days_ago + 1)
