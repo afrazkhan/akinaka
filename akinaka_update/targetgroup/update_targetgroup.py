@@ -12,6 +12,11 @@ class TargetGroup():
         self.role_arn = role_arn
         self.new_asg = new_asg
 
+    def get_application_name(self):
+        asg_split = self.new_asg.split('-')[0:-1]
+
+        return '-'.join(asg_split)
+
     def filter_out_unwanted_asgs(self, asgs, wanted_asg):
         """
         Takes a list of ASG objects (dicts), the ones you want to keep, and filters out everything else

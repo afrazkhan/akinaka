@@ -20,19 +20,13 @@ class ASG():
         self.target_group = target_group
         self.scale_to = scale_to if scale_to else 1
 
-    def return_application_name(self):
+    def get_application_name(self):
         """
-        Uses the classes self.targetgroup or self.loadbalancer arguments (whichever is available)
-        to return a string denoting the application attached to that argument
+        Returns the application name that we're deploying, worked out from the target group
+        (via the load balancer if applicable)
         """
         
-        if self.loadbalancer:
-            target_group_arn = self.get_lb_target_group_arn()
-        elif self.target_group:
-            target_group_arn = self.get_target_group_arn(self.target_group)
-        else:
-            raise exceptions.AkinakaCriticalException("Couldn't get name of the application we're updating")
-
+        target_group_arn = self.get_target_group_arn()
         active_asg = self.get_active_asg(target_group_arn)
         asg_split = active_asg.split('-')[0:-1]
         
@@ -42,13 +36,8 @@ class ASG():
         if self.asg is not None:
             logging.info("We've been given the ASG name as an argument")
             return self.asg
-        elif self.loadbalancer is not None and self.target_group is None:
-            target_group_arn = self.get_lb_target_group_arn()
-        elif self.loadbalancer is None and self.target_group is not None:
-            target_group_arn = self.get_target_group_arn(self.target_group)
-        else:
-            raise exceptions.AkinakaCriticalException("Pass either --lb, --asg, or --lt")
         
+        target_group_arn = self.get_target_group_arn()        
         active_asg = self.get_active_asg(target_group_arn)
         new_asg = self.get_inactive_asg(active_asg)        
 
@@ -133,14 +122,15 @@ class ASG():
         except Exception as e:
             raise exceptions.AkinakaCriticalException("{}: Likely couldn't find the ASG you're trying to update".format(e))
 
-    def get_lb_target_group_arn(self):
+    def get_target_group_arn(self):
         """
-        Returns the ARN of the target group attached to this loadbalancer. This method is only
-        safe to use if your loadbalancer is attached to a single target group, so it therefore
-        complains if that's not the case
+        Returns a string containing the ARN of the target group supplied by --targetgroup or worked
+        out by stepping through some logic from the loadbalancer from --lb
         """
 
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+        if self.target_group is not None:
+            return alb_client.describe_target_groups(Names=[self.target_group])['TargetGroups'][0]['TargetGroupArn']
 
         loadbalancer_raw_info = alb_client.describe_load_balancers(Names=[self.loadbalancer])
         loadbalancer_arn = loadbalancer_raw_info['LoadBalancers'][0]['LoadBalancerArn']
@@ -161,11 +151,6 @@ class ASG():
             error_message = "Load balancer has no target groups"
 
         raise exceptions.AkinakaCriticalException(error_message)
-
-    def get_target_group_arn(self, target_group):
-        """Returns a string containing the ARN of the target group"""
-        alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
-        return alb_client.describe_target_groups(Names=[target_group])['TargetGroups'][0]['TargetGroupArn']
 
     def get_target_groups_instances(self, target_group_arn):
         """Returns an array of instance IDs belonging to the target group specified"""
