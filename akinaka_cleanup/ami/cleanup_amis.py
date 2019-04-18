@@ -7,7 +7,10 @@ from datetime import timedelta, timezone, datetime
 from time import strftime
 import dateutil.parser
 from akinaka_client.aws_client import AWS_Client
+from akinaka_libs import helpers
+import logging
 
+helpers.set_logger()
 aws_client = AWS_Client()
 
 class CleanupAMIs():
@@ -43,7 +46,7 @@ class CleanupAMIs():
                 amis_to_delete.add(ami['ImageId'])
 
         # Same with list comprehension
-        # print([ami for ami in all_amis if dateutil.parser.parse(ami['CreationDate']) < self.retention_start])
+        # logging.info([ami for ami in all_amis if dateutil.parser.parse(ami['CreationDate']) < self.retention_start])
         return amis_to_delete
 
     def delist_in_use_amis(self, amis):
@@ -119,10 +122,10 @@ class CleanupAMIs():
         amis_to_delete = self.delist_launch_template_finds(amis_to_delete)
         
         if self.not_dry_run:
-            print("Deleting the following AMIs and their snapshots: {}".format(amis_to_delete))
+            logging.info("Deleting the following AMIs and their snapshots: {}".format(amis_to_delete))
             self.delete_amis(amis_to_delete)
         else:
-            print("These are the AMIs I would have deleted if you gave me --not-dry-run: {}".format(amis_to_delete))
+            logging.info("These are the AMIs I would have deleted if you gave me --not-dry-run: {}".format(amis_to_delete))
 
 
 

@@ -7,7 +7,10 @@ from datetime import timedelta, timezone, datetime
 from time import strftime
 import dateutil.parser
 from akinaka_client.aws_client import AWS_Client
+from akinaka_libs import helpers
+import logging
 
+helpers.set_logger()
 aws_client = AWS_Client()
 
 class CleanupVolumes():
@@ -39,16 +42,16 @@ class CleanupVolumes():
 
     def cleanup(self):
         for role in self.role_arns:
-            print("\nProcessing account: {}".format(role))
+            logging.error("\nProcessing account: {}".format(role))
             volumes_to_delete = self.list_available_volumes(role)
 
             if self.not_dry_run:
-                print("Deleting the following volumes and their snapshots: {}".format(volumes_to_delete))
+                logging.info("Deleting the following volumes and their snapshots: {}".format(volumes_to_delete))
                 self.delete_volumes(volumes_to_delete, role)
             else:
-                print("These are the volumes I would have deleted if you gave me --not-dry-run:\n")
+                logging.info("These are the volumes I would have deleted if you gave me --not-dry-run:\n")
                 for volume in volumes_to_delete:
-                    print("Volume: {}\n".format(volume['VolumeId']))
+                    logging.info("Volume: {}\n".format(volume['VolumeId']))
 
 
 

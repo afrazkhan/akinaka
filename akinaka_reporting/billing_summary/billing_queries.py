@@ -5,6 +5,10 @@ import time
 import datetime
 import sys
 import tabulate
+from akinaka_libs import helpers
+import logging
+
+helpers.set_logger()
 
 class BillingQueries():
     def __init__(self, region, assume_role_arn):
@@ -15,7 +19,7 @@ class BillingQueries():
             response = self.costexplorer.get_bill_estimates(from_days_ago)
             data = response['ResultsByTime']
         except Exception as e:
-            print("Billing estimates is not available: {}".format(e))
+            logging.error("Billing estimates is not available: {}".format(e))
             return e
         
         results = []
@@ -35,5 +39,5 @@ class BillingQueries():
         message += tabulate.tabulate(results, headers=["Date", "Total"], tablefmt='psql')
         message += "\n"
 
-        print(message)
-        return message
+        logging.info(message)
+        return

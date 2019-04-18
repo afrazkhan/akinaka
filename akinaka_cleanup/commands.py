@@ -1,4 +1,8 @@
 import click
+from akinaka_libs import helpers
+import logging
+
+helpers.set_logger()
 
 @click.group()
 @click.option("--region", required=True, help="Region your resources are located in")
@@ -37,7 +41,7 @@ def ami(ctx, retention, not_dry_run, exceptional_amis, launch_templates):
         amis.cleanup()
         exit(0)
     except Exception as e:
-        print(e)
+        logging.error(e)
         exit(1)
 
 @cleanup.command()
@@ -54,7 +58,7 @@ def ebs(ctx):
         volumes.cleanup()
         exit(0)
     except Exception as e:
-        print(e)
+        logging.error(e)
         exit(1)
 
 

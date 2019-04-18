@@ -1,58 +1,145 @@
 #!/usr/bin/env python3
 
 from time import sleep
+from akinaka_libs import helpers
+from akinaka_libs import exceptions
 from akinaka_client.aws_client import AWS_Client
+import logging
 
 aws_client = AWS_Client()
 
 class ASG():
-    def __init__(self, ami, region, role_arn, loadbalancer=None, asg=None, target_group=None):
+    """All the methods needed to perform a blue/green deploy"""
+
+    def __init__(self, ami, region, role_arn, loadbalancer=None, asg=None, target_group=None, scale_to=None):
         self.loadbalancer = loadbalancer
         self.ami = ami
         self.region = region
         self.role_arn = role_arn
         self.asg = asg
         self.target_group = target_group
+        self.scale_to = scale_to if scale_to else 1
+
+    def return_application_name(self):
+        """
+        Uses the classes self.targetgroup or self.loadbalancer arguments (whichever is available)
+        to return a string denoting the application attached to that argument
+        """
+        
+        if self.loadbalancer:
+            target_group_arn = self.get_lb_target_group_arn()
+        elif self.target_group:
+            target_group_arn = self.get_target_group_arn(self.target_group)
+        else:
+            raise exceptions.AkinakaCriticalException("Couldn't get name of the application we're updating")
+
+        active_asg = self.get_active_asg(target_group_arn)
+        asg_split = active_asg.split('-')[0:-1]
+        
+        return '-'.join(asg_split)
+
+    def work_out_new_asg(self):
+        if self.asg is not None:
+            logging.info("We've been given the ASG name as an argument")
+            return self.asg
+        elif self.loadbalancer is not None and self.target_group is None:
+            target_group_arn = self.get_lb_target_group_arn()
+        elif self.loadbalancer is None and self.target_group is not None:
+            target_group_arn = self.get_target_group_arn(self.target_group)
+        else:
+            raise exceptions.AkinakaCriticalException("Pass either --lb, --asg, or --lt")
+        
+        active_asg = self.get_active_asg(target_group_arn)
+        new_asg = self.get_inactive_asg(active_asg)        
+
+        return new_asg
 
     def do_update(self):
-        target_groups = None
+        new_asg = self.work_out_new_asg()
         new_ami = self.ami
 
-        if self.asg is not None:
-            new_asg = self.asg
-        elif self.loadbalancer is not None and self.target_group is None:
-            target_groups = self.get_lb_target_groups()
-        elif self.loadbalancer is None and self.target_group is not None:
-            target_groups = [self.get_target_group_arn(self.target_group)]
-        else:
-            print("""
-            One of these mutually exclusive options need to be passed:
-               --lb
-               --asg
-               --target-groups
-            """)
-            exit(1)
+        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(new_asg))
+        self.update_launch_template(new_asg, new_ami, self.get_lt_name(new_asg))
+        
+        logging.info("Scaling ASG down")
+        self.scale(new_asg, 0, 0, 0)
+        while not self.asg_is_empty(new_asg):
+            logging.info("Waiting for instances in ASG to terminate")
+            sleep(10)
 
-        if target_groups is not None:
-            these_current_asg_instances = self.current_asg_instances(target_groups)
-            new_asg = self.get_inactive_asg(these_current_asg_instances)
+        logging.info("Scaling ASG back up")
+        self.scale(new_asg, self.scale_to, self.scale_to, self.scale_to)
+        
+        while len(self.get_auto_scaling_group_instances(new_asg)) < 1:
+            logging.info("Waiting for instances in ASG to start ...")
+            sleep(10)
+            
+        logging.info("First instance has started")
 
-        try:
-            self.update_launch_template(new_asg, new_ami, self.get_lt_name(new_asg))
-            self.update_asg(new_asg, 1, 1, 1)
-            open("new_asg.txt", "w").write(new_asg)
-        except Exception as e:
-            print("Didn't update the ASG {}, because: {}".format(new_asg, e))
-            exit(1)
+        # Try to get information for an instance in the new ASG 20 times
+        for i in range(20):
+            try:
+                first_new_instance = self.get_first_new_instance(new_asg)
+                if i == 20:
+                    raise exceptions.AkinakaCriticalException
+                break
+            except exceptions.AkinakaLoggingError as error:
+                logging.info("Retry {}".format(i))
+                logging.info("Problem in getting data for first new ASG instance")
+                logging.info("get_auto_scaling_group_instances() returned: {}".format(self.get_auto_scaling_group_instances(new_asg)))
+                logging.info("Error was: {}".format(error))
 
+        # Show console output for first instance up until it's Lifecycle Hook has passed
+        while self.get_auto_scaling_group_instances(auto_scaling_group_id=new_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":        
+            try:
+                logging.info("Attempting to retrieve console output from first instance up -- this will not work for non-nitro hypervisor VMs")
+                logging.info(self.get_instance_console_output(first_new_instance)['Output'])
+            except KeyError:
+                logging.info("No output from instance yet. Trying again in 10 seconds.")
+            sleep(10)
+
+        # Wait for remaining instances (if any) to come up too
+        while len(self.asgs_healthy_instances(new_asg)) < self.scale_to:
+            logging.info("Waiting for all instances to be healthy ...")
+
+        logging.info("ASG fully healthy. Logging new ASG name to \"new_asg.txt\"")
+        open("new_asg.txt", "w").write(new_asg)
+
+    def get_first_new_instance(self, new_asg):
+        asg_instances = self.get_auto_scaling_group_instances(new_asg)
+        if len(asg_instances) < 1: raise exceptions.AkinakaLoggingError
+
+        return asg_instances[0]['InstanceId']
+
+    def get_instance_console_output(self, instance):
+        ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
+        return ec2_client.get_console_output(InstanceId=instance)
+
+    def instance_state(self, instance):
+        ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
+        instance_states = ec2_client.describe_instance_status(IncludeAllInstances=True, InstanceIds=[instance])
+        
+        while 'InstanceStatuses' not in instance_states:
+            instance_states = ec2_client.describe_instance_status(InstanceIds=[instance])
+        
+        return instance_states['InstanceStatuses'][0]['InstanceState']['Name']
 
     def get_lt_name(self, asg):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
         lt_info = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])
 
-        return lt_info['AutoScalingGroups'][0]['LaunchTemplate']['LaunchTemplateName']
+        try:
+            return lt_info['AutoScalingGroups'][0]['LaunchTemplate']['LaunchTemplateName']    
+        except Exception as e:
+            raise exceptions.AkinakaCriticalException("{}: Likely couldn't find the ASG you're trying to update".format(e))
 
-    def get_lb_target_groups(self):
+    def get_lb_target_group_arn(self):
+        """
+        Returns the ARN of the target group attached to this loadbalancer. This method is only
+        safe to use if your loadbalancer is attached to a single target group, so it therefore
+        complains if that's not the case
+        """
+
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
 
         loadbalancer_raw_info = alb_client.describe_load_balancers(Names=[self.loadbalancer])
@@ -61,38 +148,47 @@ class ASG():
         target_groups_raw_info = alb_client.describe_target_groups(LoadBalancerArn=loadbalancer_arn)['TargetGroups']
         target_group_arns = [targetgroup['TargetGroupArn'] for targetgroup in target_groups_raw_info]
 
-        return target_group_arns
+        # If we get this far, then the LB has more than a single target group, and we can't work
+        # out which one the caller wants
+        if len(target_group_arns) == 1:
+            return target_group_arns[0]
+        elif len(target_group_arns) > 1:
+            error_message = "Load balancer has {} target groups".format(len(target_group_arns))
+
+            for target_group in target_group_arns:
+                error_message += "> " + target_group
+        else:
+            error_message = "Load balancer has no target groups"
+
+        raise exceptions.AkinakaCriticalException(error_message)
 
     def get_target_group_arn(self, target_group):
-        alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)        
+        """Returns a string containing the ARN of the target group"""
+        alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
         return alb_client.describe_target_groups(Names=[target_group])['TargetGroups'][0]['TargetGroupArn']
 
-    def get_target_groups_instances(self, target_group_arns):
+    def get_target_groups_instances(self, target_group_arn):
+        """Returns an array of instance IDs belonging to the target group specified"""
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
         
         target_groups_instances = []
 
-        for arn in target_group_arns:
-            target_group_instances = alb_client.describe_target_health(TargetGroupArn=arn)['TargetHealthDescriptions']
-
-            for instance in target_group_instances:
-                if instance['TargetHealth']['State'] == 'healthy':
-                    target_groups_instances.append(instance['Target']['Id'])
+        these_target_group_instances = alb_client.describe_target_health(TargetGroupArn=target_group_arn)['TargetHealthDescriptions']
+        
+        # NOTE: This presumes some robustness from your target groups. If they contain instances
+        #       from stale ASGs, or anything else is off in them, you will get unexpected results
+        for instance in these_target_group_instances:
+            target_groups_instances.append(instance['Target']['Id'])
         
         return target_groups_instances 
 
-    def current_asg_instances(self, target_groups):
+    def get_active_asg(self, target_groups):
         ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
-        
-        if self.target_group is not None:
-            target_groups = [self.get_target_group_arn(self.target_group)]
-        else:
-            target_groups = self.get_lb_target_groups()
 
         target_groups_instances = self.get_target_groups_instances(target_groups)
+        
         instances_with_tags = {}
 
-        #get autoscaling groups from instances
         raw_instances_reservations = ec2_client.describe_instances(InstanceIds=target_groups_instances)['Reservations']
 
         for reservation in raw_instances_reservations:
@@ -108,24 +204,20 @@ class ASG():
                 if tag['Key'] == 'aws:autoscaling:groupName':
                     instances_with_asg[key] = tag['Value']
 
+        return next(iter(instances_with_asg.values()))
 
-        return instances_with_asg
-
-    def get_inactive_asg(self, instances_with_asgs):
-        active_asg = next(iter(instances_with_asgs.values()))
-        asg_parts = active_asg.split(active_asg[2])
-
-        asg_generic_name = "{}-{}".format(asg_parts[0], asg_parts[1])
-        active_colour = asg_parts[2]
+    def get_inactive_asg(self, active_asg):        
+        asg_parts = active_asg.split('-')
+        active_colour = asg_parts[-1]
 
         if active_colour == "blue":
             inactive_colour = "green"
         else:
             inactive_colour = "blue"
 
-        inactive_asg_name = "{}-{}".format(asg_generic_name, inactive_colour)
+        asg_parts[-1] = inactive_colour
 
-        return inactive_asg_name
+        return "-".join(asg_parts)
 
     def get_launch_template_id(self, lt_name):
         ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
@@ -174,22 +266,9 @@ class ASG():
             "version": launch_template_new_version
         }
 
-    def update_asg(self, auto_scaling_group_id, min_size, max_size, capacity):
-        # Get a list of active instances from the auto scaling group
+    def scale(self, auto_scaling_group_id, min_size, max_size, capacity):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
 
-        # Scale down
-        response = asg_client.update_auto_scaling_group(
-            AutoScalingGroupName=auto_scaling_group_id,
-            MinSize=0,
-            MaxSize=0,
-            DesiredCapacity=0
-        )
-
-        while len(self.get_auto_scaling_group_status(auto_scaling_group_id)) > 0:
-            sleep(60)
-
-        # Scale up
         response = asg_client.update_auto_scaling_group(
             AutoScalingGroupName=auto_scaling_group_id,
             MinSize=min_size,
@@ -197,26 +276,46 @@ class ASG():
             DesiredCapacity=capacity
         )
 
-        while len(self.get_auto_scaling_group_status(auto_scaling_group_id)) < 1:
-            sleep(10)
-
         return response
 
-    def get_auto_scaling_group_status(self, auto_scaling_group_id):
+    def get_auto_scaling_group_instances(self, auto_scaling_group_id, instance_ids=None):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
-        asg_instances = asg_client.describe_auto_scaling_instances()
+        instance_ids = instance_ids if instance_ids else []
+        asg_instances = asg_client.describe_auto_scaling_instances(InstanceIds=instance_ids)
         target_instances = []
 
         for i in asg_instances['AutoScalingInstances']:
-            if i['AutoScalingGroupName'] == auto_scaling_group_id and i['LifecycleState'] == "InService":
+            if i['AutoScalingGroupName'] == auto_scaling_group_id:
                 target_instances.append(i)
 
-                print("Instance {instance_id} has state = {instance_state}\n"
+                logging.debug("Instance {instance_id} has state = {instance_state},"
                     "Lifecycle is at {instance_lifecycle_state}".format(
                         instance_id = i['InstanceId'],
                         instance_state = i['HealthStatus'],
                         instance_lifecycle_state = i['LifecycleState']
+                    )   
                 )
-            )
+
+                logging.info("Instance {instance_id} is {instance_lifecycle_state}".format(
+                        instance_id = i['InstanceId'],
+                        instance_lifecycle_state = i['LifecycleState']
+                    )
+                )
+            
 
         return target_instances
+    
+    def asg_is_empty(self, auto_scaling_group_id):
+        asg_instances = self.get_auto_scaling_group_instances(auto_scaling_group_id)
+
+        return all(instance.get('LifecycleState') == 'Terminated' for instance in asg_instances)
+
+    def asgs_healthy_instances(self, auto_scaling_group_id):
+        asg_instances = self.get_auto_scaling_group_instances(auto_scaling_group_id)
+        healthy_instances = []
+    
+        for i in asg_instances:
+            if i['LifecycleState'] == "InService":
+                healthy_instances.append(i)
+
+        return healthy_instances

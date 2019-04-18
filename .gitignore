@@ -9,3 +9,5 @@
 /*.egg
 
 /build/*
+.vscode
+new_asg.txt

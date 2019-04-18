@@ -1,4 +1,8 @@
 import click
+from akinaka_libs import helpers
+import logging
+
+helpers.set_logger()
 
 @click.group()
 @click.option("--region", envvar='AWS_DEFAULT_REGION', help="Region your resources are located in")
@@ -30,5 +34,5 @@ def rds(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_n
         rds_copy.copy_instance()
         exit(0)
     except Exception as e:
-        print(e)
+        logging.error(e)
         exit(1)

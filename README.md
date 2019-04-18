@@ -18,6 +18,95 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
 
     pip3 install akinaka
 
+## Requirements and Presumptions
+
+Format of ASG names: "whatever-you-like*-blue/green*" — the part in bold is necessary, i.e. you must have two ASGs, one ending with "-blue" and one ending with "-green".
+
+The following permissions are necessary for the IAM role / user that will be running Akinaka:
+
+    sts:AssumeRole
+
+The following permissions are necessary for the IAM role that the above role /user will be assuming, if you wish to use every single feature:
+
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "2018121701",
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:AuthorizeSecurityGroupIngress",
+                    "ec2:DescribeInstances",
+                    "ec2:CreateKeyPair",
+                    "ec2:CreateImage",
+                    "ec2:CopyImage",
+                    "ec2:DescribeSnapshots",
+                    "elasticloadbalancing:DescribeLoadBalancers",
+                    "ec2:DeleteVolume",
+                    "ec2:ModifySnapshotAttribute",
+                    "autoscaling:DescribeAutoScalingGroups",
+                    "ec2:DescribeVolumes",
+                    "ec2:DetachVolume",
+                    "ec2:DescribeLaunchTemplates",
+                    "ec2:CreateTags",
+                    "ec2:RegisterImage",
+                    "autoscaling:DetachLoadBalancerTargetGroups",
+                    "ec2:RunInstances",
+                    "ec2:StopInstances",
+                    "ec2:CreateVolume",
+                    "autoscaling:AttachLoadBalancerTargetGroups",
+                    "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                    "ec2:GetPasswordData",
+                    "elasticloadbalancing:DescribeTargetGroupAttributes",
+                    "elasticloadbalancing:DescribeAccountLimits",
+                    "ec2:DescribeImageAttribute",
+                    "elasticloadbalancing:DescribeRules",
+                    "ec2:DescribeSubnets",
+                    "ec2:DeleteKeyPair",
+                    "ec2:AttachVolume",
+                    "autoscaling:DescribeAutoScalingInstances",
+                    "ec2:DeregisterImage",
+                    "ec2:DeleteSnapshot",
+                    "ec2:DescribeRegions",
+                    "ec2:ModifyImageAttribute",
+                    "elasticloadbalancing:DescribeListeners",
+                    "ec2:CreateSecurityGroup",
+                    "ec2:CreateSnapshot",
+                    "elasticloadbalancing:DescribeListenerCertificates",
+                    "ec2:ModifyInstanceAttribute",
+                    "elasticloadbalancing:DescribeSSLPolicies",
+                    "ec2:TerminateInstances",
+                    "elasticloadbalancing:DescribeTags",
+                    "ec2:DescribeTags",
+                    "ec2:DescribeLaunchTemplateVersions",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeImages",
+                    "ec2:DeleteSecurityGroup",
+                    "elasticloadbalancing:DescribeTargetHealth",
+                    "elasticloadbalancing:DescribeTargetGroups"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "2018121702",
+                "Effect": "Allow",
+                "Action": [
+                    "ssm:PutParameter",
+                    "ssm:GetParameter",
+                    "autoscaling:UpdateAutoScalingGroup",
+                    "ec2:ModifyLaunchTemplate",
+                    "ec2:CreateLaunchTemplateVersion",
+                    "autoscaling:AttachLoadBalancerTargetGroups"
+                ],
+                "Resource": [
+                    "arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*",
+                    "arn:aws:ssm:eu-west-1:[YOUR_ACCOUNT]:parameter/deploying-status-*",
+                    "arn:aws:ec2:*:*:launch-template/*"
+                ]
+            }
+        ]
+    }
+
 ## A Note on Role Assumption
 Akinaka uses IAM roles to gain access into multiple accounts. Most commands require you to specify a list of roles you wish to perform a task for, and that role must have the [sts:AssumeRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_enable-create.html) permission. This is not only good security, it's helpful for ensuring you're doing things to the accounts you think you're doing things for ;)
 
