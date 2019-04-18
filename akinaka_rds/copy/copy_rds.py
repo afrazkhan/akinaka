@@ -5,7 +5,10 @@ import boto3
 import time
 import datetime
 import sys
+from akinaka_libs import helpers
+import logging
 
+helpers.set_logger()
 aws_client = AWS_Client()
 
 class CopyRDS():
@@ -21,7 +24,7 @@ class CopyRDS():
         self.target_instance_name = target_instance_name
 
     def copy_instance(self):
-
+        logging.info("Starting RDS copy...")
         rds_source_client   = aws_client.create_client('rds', self.region, self.source_role_arn, 5400)
         rds_target_client   = aws_client.create_client('rds', self.region, self.target_role_arn, 5400)
         kms_client          = aws_client.create_client('kms', self.region, self.source_role_arn, 5400)
@@ -64,27 +67,27 @@ class CopyRDS():
 
         self.modify_rds_instance_security_groups(rds_client=rds_target_client, instancename=self.target_instance_name, securitygroup=self.target_security_group)
 
-        print("  Finished, check instance {}!".format(self.target_instance_name))
+        logging.info("Finished, check instance {}!".format(self.target_instance_name))
 
     def get_kms_key(self, kms_client, source_account, target_account, target_account_arn):
 
         key_alias = 'alias/RDSBackupRestoreSharedKeyWith{}'.format(target_account)
-        print("Searching for Customer Managed KMS Key with alias {} that is already shared with account {}...".format(key_alias, target_account))
+        logging.info("Searching for Customer Managed KMS Key with alias {} that is already shared with account {}...".format(key_alias, target_account))
 
         # try to retrieve the KMS key with the specified alias to see if it exists
         try:
             key = kms_client.describe_key(KeyId=key_alias)
-            print("  Found key: {}".format(key['KeyMetadata']['Arn']))
+            logging.info("Found key: {}".format(key['KeyMetadata']['Arn']))
             return key
         except kms_client.exceptions.NotFoundException:
             # if it doesn't exist, create it
-            print("  No valid key found.")
+            logging.error("No valid key found.")
             key = self.create_shared_kms_key(kms_client, source_account, target_account, target_account_arn, key_alias)
             return key
 
     def create_shared_kms_key(self, kms_client, source_account, target_account, target_account_arn, key_alias):
 
-        print("Creating Customer Managed KMS Key that is shared...")
+        logging.info("Creating Customer Managed KMS Key that is shared...")
 
         # create a Customer Managed KMS key, needed to be able to share the encrypted snapshot
         kms_key = kms_client.create_key(
@@ -123,7 +126,7 @@ class CopyRDS():
             TargetKeyId=kms_key['KeyMetadata']['Arn']
         )
 
-        print("Created KMS Key {}, shared with account {}".format(kms_key['KeyMetadata']['Arn'], target_account_arn))
+        logging.info("Created KMS Key {}, shared with account {}".format(kms_key['KeyMetadata']['Arn'], target_account_arn))
         return kms_key
 
     def copy_shared_snapshot_to_local(self, rds_client, shared_snapshot, kms_key):
@@ -132,7 +135,7 @@ class CopyRDS():
         # account where we want to restore the RDS instance
         target_db_snapshot_id = "{}-copy".format(shared_snapshot['DBSnapshotIdentifier'])
 
-        print("Copying shared snaphot {} to local snapshot {}...".format(shared_snapshot['DBSnapshotArn'], target_db_snapshot_id))
+        logging.info("Copying shared snaphot {} to local snapshot {}...".format(shared_snapshot['DBSnapshotArn'], target_db_snapshot_id))
 
         try:
             copy = rds_client.copy_db_snapshot(
@@ -140,48 +143,47 @@ class CopyRDS():
                 TargetDBSnapshotIdentifier=target_db_snapshot_id,
                 KmsKeyId=kms_key['KeyMetadata']['Arn']
             )
-            print("  Copy created.")
+            logging.info("Copy created.")
             return copy['DBSnapshot']
         except rds_client.exceptions.DBSnapshotAlreadyExistsFault:
             # if the snapshot we tried to make already exists, retrieve it
-            print("Snapshot already exists, retrieving {}...".format(target_db_snapshot_id))
+            logging.info("Snapshot already exists, retrieving {}...".format(target_db_snapshot_id))
 
             snapshots = rds_client.describe_db_snapshots(
                 DBSnapshotIdentifier=target_db_snapshot_id,
             )
-            print("  Retrieved.")
+            logging.info("Retrieved.")
             return snapshots['DBSnapshots'][0]
 
     def share_snapshot_with_external_account(self, rds_client, snapshot, target_account):
         # in order to restore a snapshot from another account it needs to be shared
         # with that account first
-        print("Modifying snaphot {} to be shared with account {}...".format(snapshot['DBSnapshotArn'], target_account))
+        logging.info("Modifying snaphot {} to be shared with account {}...".format(snapshot['DBSnapshotArn'], target_account))
         rds_client.modify_db_snapshot_attribute(
             DBSnapshotIdentifier=snapshot['DBSnapshotIdentifier'],
             AttributeName='restore',
             ValuesToAdd=[target_account]
         )
-        print("  Modified.")
+        logging.info("Modified.")
 
     def rename_or_delete_target_instance(self, rds_client, instancename, overwrite_target ):
-
-        print("Checking for an existing RDS instance by the name {} and renaming or deleting if it's found".format(instancename))
+        logging.info("Checking for an existing RDS instance by the name {} and renaming or deleting if it's found".format(instancename))
         # check if we already have an instance by this name
         try:
             instance = rds_client.describe_db_instances(DBInstanceIdentifier=instancename)['DBInstances'][0]
-            print("  Instance found")
+            logging.info("Instance found")
         except rds_client.exceptions.DBInstanceNotFoundFault:
             instance = None
-            print("  Instance not found")
+            logging.info("Instance not found")
 
         if instance is not None:
             if overwrite_target:
-                print("  Instance found and overwrite if found True, deleting instance")
+                logging.info("Instance found and overwrite if found True, deleting instance")
                 rds_client.delete_db_instance(
                     DBInstanceIdentifier=instancename,
                     SkipFinalSnapshot=True
                     )
-                print("  Deleting instance. This will take a while...")
+                logging.info("Deleting instance. This will take a while...")
                 waiter = rds_client.get_waiter('db_instance_deleted')
                 waiter.wait(
                     DBInstanceIdentifier=instancename,
@@ -189,9 +191,9 @@ class CopyRDS():
                         'MaxAttempts': 120
                     }
                 )
-                print("  Instance is deleted!")
+                logging.info("Instance is deleted!")
             else:
-                print("  Instance found and renaming instance")
+                logging.info("Instance found and renaming instance")
                 try:
                     rds_client.modify_db_instance(
                         DBInstanceIdentifier=instancename,
@@ -207,10 +209,10 @@ class CopyRDS():
         while True:
             instancecheck = rds_client.describe_db_instances(DBInstanceIdentifier=instance['DBInstance']['DBInstanceIdentifier'])['DBInstances'][0]
             if instancecheck['DBInstanceStatus'] == 'available':
-                print("  Instance {} ready and available!".format(instance['DBInstance']['DBInstanceIdentifier']))
+                logging.info("Instance {} ready and available!".format(instance['DBInstance']['DBInstanceIdentifier']))
                 break
             else:
-                print("Instance creation in progress, sleeping 10 seconds...")
+                logging.info("Instance creation in progress, sleeping 10 seconds...")
                 time.sleep(10)
 
     def wait_for_snapshot_to_be_ready(self, rds_client, snapshot):
@@ -219,29 +221,28 @@ class CopyRDS():
         while True:
             snapshotcheck = rds_client.describe_db_snapshots(DBSnapshotIdentifier=snapshot['DBSnapshotIdentifier'])['DBSnapshots'][0]
             if snapshotcheck['Status'] == 'available':
-                print("  Snapshot {} complete and available!".format(snapshot['DBSnapshotIdentifier']))
+                logging.info("Snapshot {} complete and available!".format(snapshot['DBSnapshotIdentifier']))
                 break
             else:
-                print("Snapshot {} in progress, {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
+                logging.info("Snapshot {} in progress, {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
                 time.sleep(10)
 
     def make_snapshot_from_running_instance(self, rds_client, source_instance_name):
-        print("Making a new snapshot from the running RDS instance")
+        logging.info("Making a new snapshot from the running RDS instance")
         try:
             today = datetime.date.today()
             snapshot = rds_client.create_db_snapshot(
                 DBInstanceIdentifier=source_instance_name,
                 DBSnapshotIdentifier="{}-{:%Y-%m-%d}".format(source_instance_name, today),
             )
-            print("  Snapshot created.")
+            logging.info("Snapshot created.")
             return snapshot['DBSnapshot']
         except Exception as exception:
-            print("ERROR: Failed to make snapshot from instance")
-            print(exception)
+            logging.error("Failed to make snapshot from instance: {}".format(exception))
             sys.exit(1)
 
     def get_latest_automatic_rds_snapshots(self, rds_client, source_instance_name):
-        print("Getting latest (automated) snapshot from rds instance {}...".format(source_instance_name))
+        logging.info("Getting latest (automated) snapshot from rds instance {}...".format(source_instance_name))
         # we can't query for the latest snapshot straight away, so we have to retrieve
         # a full list and go through all of them
         snapshots = rds_client.describe_db_snapshots(
@@ -256,7 +257,7 @@ class CopyRDS():
             if snapshot['SnapshotCreateTime'] > latest['SnapshotCreateTime']:
                 latest = snapshot
 
-        print("  Found snapshot {}".format(latest['DBSnapshotIdentifier']))
+        logging.info("Found snapshot {}".format(latest['DBSnapshotIdentifier']))
         return latest
 
     def recrypt_snapshot_with_new_key(self, rds_client, snapshot, kms_key):
@@ -266,7 +267,7 @@ class CopyRDS():
         else:
             target_db_snapshot_id = "{}-recrypted".format(snapshot['DBSnapshotIdentifier'])
 
-        print("Copying automatic snapshot to manual snapshot...")
+        logging.info("Copying automatic snapshot to manual snapshot...")
 
         try:
             # copy the snapshot, supplying the new KMS key (which is also shared with
@@ -276,11 +277,11 @@ class CopyRDS():
                 TargetDBSnapshotIdentifier=target_db_snapshot_id,
                 KmsKeyId=kms_key['KeyMetadata']['Arn']
             )
-            print("  Snapshot created.")
+            logging.info("Snapshot created.")
             return copy['DBSnapshot']
         except rds_client.exceptions.DBSnapshotAlreadyExistsFault:
             # if the snapshot we tried to make already exists, retrieve it
-            print("Snapshot already exists, retrieving {}".format(target_db_snapshot_id))
+            logging.info("Snapshot already exists, retrieving {}".format(target_db_snapshot_id))
 
             snapshots = rds_client.describe_db_snapshots(
                 DBSnapshotIdentifier=target_db_snapshot_id,
@@ -290,7 +291,7 @@ class CopyRDS():
 
     def create_rds_instance_from_snapshot(self, rds_client, snapshot, instancename, dbsubnet_group):
         # restore an instance from the specified snapshot
-        print("Restoring RDS instance {} from snapshot {}".format(instancename, snapshot['DBSnapshotIdentifier']))
+        logging.info("Restoring RDS instance {} from snapshot {}".format(instancename, snapshot['DBSnapshotIdentifier']))
         try:
             if dbsubnet_group is None:
                 dbsubnet_group = 'default'
@@ -300,15 +301,14 @@ class CopyRDS():
                 DBSnapshotIdentifier=snapshot['DBSnapshotArn'],
                 DBSubnetGroupName=dbsubnet_group,
             )
-            print("  RDS instance restored.")
+            logging.info("RDS instance restored.")
             return instance
         except rds_client.exceptions.DBInstanceAlreadyExistsFault:
-            print("ERROR: an instance with the name {} already exists, please specify a different name or remove that instance first".format(instancename))
+            logging.error("An instance with the name {} already exists, please specify a different name or remove that instance first".format(instancename))
             sys.exit(1)
 
     def modify_rds_instance_security_groups(self, rds_client, instancename, securitygroup):
-
-        print("Modifying RDS instance to attach correct securitygroup")
+        logging.info("Modifying RDS instance to attach correct securitygroup")
         try:
             rds_client.modify_db_instance(
                 DBInstanceIdentifier=instancename,
@@ -317,6 +317,7 @@ class CopyRDS():
                 ],
                 ApplyImmediately=True
             )
-            print("  RDS Instance {} modified".format(instancename))
+            logging.info("RDS Instance {} modified".format(instancename))
         except Exception as e:
+            logging.error("{}".format(e))
             raise
