@@ -67,9 +67,7 @@ def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
     from .asg import update_asg
 
     asg = update_asg.ASG(ami, region, role_arn, lb, asg_name, target_group, scale_to)
-    # TODO: WIP, since we still need to figure out how best to do this in a sharable way with update_targetgroup
-    # application = asg.return_application_name()
-    application = "wip"
+    application = asg.get_application_name()
 
     if lb or target_group:
         if not skip_status_check:
@@ -86,16 +84,13 @@ def targetgroup(ctx, new_asg_target):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
 
-    # TODO: See update_asg for the same thing above
-    application = "wip"
-
-    from .targetgroup import update_targetgroup
+    from .targetgroup import update_targetgroup    
 
     try:
         target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target)
         target_groups.switch_asg()
         # We've successfully deployed, so set the status of deploy to "false"
-        set_deploy_status("stop", region, role_arn, application)
+        set_deploy_status("stop", region, role_arn, target_groups.get_application_name())
         exit(0)
     except Exception as e:
         logging.error("{}".format(e))
