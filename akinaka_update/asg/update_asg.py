@@ -3,6 +3,7 @@
 from time import sleep
 from akinaka_libs import helpers
 from akinaka_libs import exceptions
+from botocore.exceptions import ParamValidationError
 from akinaka_client.aws_client import AWS_Client
 import logging
 
@@ -25,7 +26,10 @@ class ASG():
         Returns the application name that we're deploying, worked out from the target group
         (via the load balancer if applicable)
         """
-        
+
+        if self.asg:
+            return self.asg
+
         target_group_arn = self.get_target_group_arn()
         active_asg = self.get_active_asg(target_group_arn)
         asg_split = active_asg.split('-')[0:-1]
