@@ -44,10 +44,11 @@ def set_deploy_status(verb, region, role_arn, application, reset=None):
 
 @update.command()
 @click.pass_context
-def reset(ctx):
+@click.option("--application-name", required=True, help="The application name (target group) to reset unlock for re-running the 'asg' subcommand on")
+def reset(ctx, application_name):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
-    set_deploy_status("stop", region, role_arn, "reset", True)
+    set_deploy_status("stop", region, role_arn, application_name, True)
 
 @update.command()
 @click.pass_context
