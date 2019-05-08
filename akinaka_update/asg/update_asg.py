@@ -4,6 +4,7 @@ from time import sleep
 from akinaka_libs import helpers
 from akinaka_libs import exceptions
 from botocore.exceptions import ParamValidationError
+from botocore.exceptions import ClientError
 from akinaka_client.aws_client import AWS_Client
 import logging
 
@@ -163,7 +164,10 @@ class ASG():
         target_groups_instances = []
 
         these_target_group_instances = alb_client.describe_target_health(TargetGroupArn=target_group_arn)['TargetHealthDescriptions']
-        
+        these_target_group_instances = [
+            instance for instance in these_target_group_instances if not instance['TargetHealth']['State'] == "unused"
+        ]
+
         # NOTE: This presumes some robustness from your target groups. If they contain instances
         #       from stale ASGs, or anything else is off in them, you will get unexpected results
         for instance in these_target_group_instances:
@@ -179,7 +183,7 @@ class ASG():
         instances_with_tags = {}
 
         raw_instances_reservations = ec2_client.describe_instances(InstanceIds=target_groups_instances)['Reservations']
-
+            
         for reservation in raw_instances_reservations:
             for instance in reservation['Instances']:
                 instances_with_tags[instance['InstanceId']] = instance['Tags']
