@@ -214,6 +214,13 @@ Copy encrypted RDS instances between accounts:
 
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
 
+### Container
+Limited functionality for interactive with EKS and ECR. At the moment it's just getting a docker login via an assumed role to another assumed role:
+
+    akinaka.py container --region eu-west-1 --role-arn arn:aws:iam::0123456789:role/registry-rw get-ecr-login --registry 0123456789
+
+The above will assume the role `arn:aws:iam::0123456789:role/registry-rw` in the account with the registry, and spit out a `docker login` line for you to use — exactly like `aws ecr get-login`, but working for assumed roles.
+
 ### Billing
 Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
 
