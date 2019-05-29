@@ -3,16 +3,19 @@ This is a general all-purpose tool for managing things in AWS that Terraform is 
 
 At the moment it only does three things; blue/green deploys for plugging into Gitlab, AMI cleanups, and RDS copies to other accounts.
 
-1. [Installation](#installation)
-2. [Deploys](#deploys)
-3. [Cleanups](#cleanups)
-   - [AMIs](#amis)
-   - [EBS Volumes](#ebs)
-4. [RDS](#rds)
-   - [Copy](#copy)
-5. [Reporting](#reporting)
-   - [Billing](#billing)
-6. [Contributing](#contributing)
+- [Akinaka](#akinaka)
+  - [Installation](#installation)
+  - [Requirements and Presumptions](#requirements-and-presumptions)
+  - [A Note on Role Assumption](#a-note-on-role-assumption)
+  - [Deploys](#deploys)
+  - [Cleanups](#cleanups)
+    - [AMIs](#amis)
+    - [EBS Volumes](#ebs-volumes)
+  - [RDS](#rds)
+    - [Copy](#copy)
+  - [Container](#container)
+  - [Billing](#billing)
+  - [Contributing](#contributing)
 
 ## Installation
 
@@ -214,14 +217,14 @@ Copy encrypted RDS instances between accounts:
 
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
 
-### Container
+## Container
 Limited functionality for interactive with EKS and ECR. At the moment it's just getting a docker login via an assumed role to another assumed role:
 
     akinaka.py container --region eu-west-1 --role-arn arn:aws:iam::0123456789:role/registry-rw get-ecr-login --registry 0123456789
 
 The above will assume the role `arn:aws:iam::0123456789:role/registry-rw` in the account with the registry, and spit out a `docker login` line for you to use — exactly like `aws ecr get-login`, but working for assumed roles.
 
-### Billing
+## Billing
 Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
 
     akinaka.py reporting --region us-east-1 \

@@ -3,6 +3,6 @@ build_and_upload:
     script:
         - pip3 install -U twine
         - python3 setup.py sdist bdist_wheel
-        - python3 -m twine upload -u $PYPI_USERNAME -p $PYPI_PASSWORD upload dist/*
+        - python3 -m twine upload -u $PYPI_USERNAME -p $PYPI_PASSWORD dist/*
     only:
         - tags
