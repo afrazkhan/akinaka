@@ -20,3 +20,5 @@ build_and_upload_image:
         - docker build -t registry.olindata.com/olindata/akinaka/akinaka:latest .
         - docker push registry.olindata.com/olindata/akinaka/akinaka:latest
         # FIXME: Get tag from setup.py or "build_and_upload" step above
+    only:
+        - tags
