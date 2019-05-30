@@ -6,3 +6,17 @@ build_and_upload:
         - python3 -m twine upload -u $PYPI_USERNAME -p $PYPI_PASSWORD dist/*
     only:
         - tags
+
+build_and_upload_image:
+    image: docker:stable
+    services:
+        - docker:dind
+    variables:
+        DOCKER_HOST: tcp://docker:2375
+        DOCKER_DRIVER: overlay2
+    stage: build
+    script:
+        - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.olindata.com
+        - docker build -t registry.olindata.com/olindata/akinaka/akinaka:latest .
+        - docker push registry.olindata.com/olindata/akinaka/akinaka:latest
+        # FIXME: Get tag from setup.py or "build_and_upload" step above
