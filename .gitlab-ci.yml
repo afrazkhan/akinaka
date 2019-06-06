@@ -28,5 +28,7 @@ build_and_upload_image:
         - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.olindata.com
         - docker build --build-arg AKINAKA_VERSION=${AKINAKA_VERSION} -t registry.olindata.com/olindata/akinaka/akinaka:$CI_COMMIT_TAG .
         - docker push registry.olindata.com/olindata/akinaka/akinaka:$CI_COMMIT_TAG
+    when: delayed
+    start_in: 5 seconds
     only:
         - tags
