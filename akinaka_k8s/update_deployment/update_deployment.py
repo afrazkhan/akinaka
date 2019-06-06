@@ -9,49 +9,68 @@ import logging
 class UpdateDeployment():
     """Modify a Kubernetes YAML deployment spec"""
 
-    def __init__(self, application, new_image=None, new_tag=None, file_path=None):
+    def __init__(self, application, new_image=None, new_tag=None, file_path=None, dry_run=False):
         self.application = application
         self.new_image = new_image
         self.new_tag = new_tag
         self.file_path = file_path
+        self.dry_run = dry_run
 
         if not self.new_image and not self.new_tag:
             logging.error("At least --new-image or --new-tag need to be given")
             exit(1)
 
-    def read_spec(self):
+    def read_specs(self):
+        yammies = []
+
         try:
             with open(self.file_path, 'r') as stream:
                 try:
-                    return yaml.safe_load(stream)
+                    for yammy in yaml.safe_load_all(stream):
+                        yammies.append(yammy)
                 except yaml.YAMLError as exception:
                     logging.error(exception)
                     exit(1)
+
+            return yammies
         except Exception as exception:
             logging.error(exception)
             exit(1)
 
     def update_spec(self):
-        spec = self.read_spec()
+        specs = self.read_specs()
 
-        for container in spec['spec']['template']['spec']['containers']:
-            if container['name'] == self.application:
-                if self.new_image:
-                    image = self.new_image
-                else:
-                    image = container['image'].split(":")[0]
+        for spec in specs:
+            if spec['kind'] == 'Deployment' or spec['kind'] == 'Pod':
+                spec_path = spec['spec']['template']['spec']['containers']
+            elif spec['kind'] == 'CronJob':
+                spec_path = spec['spec']['jobTemplate']['spec']['template']['spec']['containers']
+            else:
+                logging.error("Can't handle spec file type of {}".format(spec['kind']))
+                exit(1)
 
-                if self.new_tag:
-                    tag = self.new_tag
-                else:
-                    tag = container['image'].split(":")[-1]
+            for container in spec_path:
+                if container['name'] == self.application:
+                    if self.new_image:
+                        image = self.new_image
+                    else:
+                        image = container['image'].split(":")[0]
 
-                container['image'] = "{image}:{tag}".format(image = image, tag = tag)
+                    if self.new_tag:
+                        tag = self.new_tag
+                    else:
+                        tag = container['image'].split(":")[-1]
 
-        return spec
+                    container['image'] = "{image}:{tag}".format(image = image, tag = tag)
+
+        return specs
 
     def write_new_spec(self):
-        new_spec = self.update_spec()
-        spec_file = open(self.file_path, "w")
-        spec_file.write(yaml.dump(new_spec, default_flow_style=False))
-        spec_file.close()
+        new_spec = yaml.dump_all(self.update_spec(), default_flow_style=False)
+
+        if not self.dry_run:
+            spec_file = open(self.file_path, "w")
+            spec_file.write(new_spec)
+            spec_file.close()
+        else:
+            print(new_spec)

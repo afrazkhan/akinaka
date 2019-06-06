@@ -15,8 +15,9 @@ def k8s():
 @click.option("--new-image", help="Full image path, minus the tag")
 @click.option("--new-tag", help="Tag to update the container's image to")
 @click.option("--file-path", default="kubernetes/deployment.yml", help="Alternative path to deployment spec. Defaults to 'kubernetes/deployment.yml'")
-def update_deployment(application, new_image, new_tag, file_path):
+@click.option("--dry-run", is_flag=True, help="If passed, then the new config is written to stdout instead of the originating file")
+def update_deployment(application, new_image, new_tag, file_path, dry_run):
     from .update_deployment import update_deployment
 
-    k8s_update = update_deployment.UpdateDeployment(application, new_image, new_tag, file_path)
+    k8s_update = update_deployment.UpdateDeployment(application, new_image, new_tag, file_path, dry_run)
     k8s_update.write_new_spec()
