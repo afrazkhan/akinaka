@@ -1,4 +1,5 @@
 # Akinaka
+
 This is a general all-purpose tool for managing things in AWS that Terraform is not responsible for -- you can think of it as an extension to the `aws` CLI.
 
 At the moment it only does three things; blue/green deploys for plugging into Gitlab, AMI cleanups, and RDS copies to other accounts.
@@ -111,9 +112,11 @@ The following permissions are necessary for the IAM role that the above role /us
     }
 
 ## A Note on Role Assumption
+
 Akinaka uses IAM roles to gain access into multiple accounts. Most commands require you to specify a list of roles you wish to perform a task for, and that role must have the [sts:AssumeRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_enable-create.html) permission. This is not only good security, it's helpful for ensuring you're doing things to the accounts you think you're doing things for ;)
 
 ## Deploys
+
 Done with the `update` parent command, and then the `asg` and `targetgroup` subcommands (`update targetgroup` is only needed for blue/green deploys).
 
 Example:
@@ -157,6 +160,7 @@ do not supply an IAM Role ARN, in order to ensure you are deploying to the accou
 you think you are.
 
 ## Cleanups
+
 Currently AMI and EBS cleanups are supported.
 
 Common option:
@@ -165,6 +169,7 @@ Common option:
 to run this command. The AMIs for the running instances found in these accounts will not be deleted. Not to be confused with `--role-arn`, accepted for the `update` parent command, for deploys.
 
 ### AMIs
+
 Cleans up AMIs and their snapshots based on a specified retention period, and deduced AMI usage (will
 not delete AMIs that are currently in use). You can optionally specify an AMI name pattern, and it will
 keep the latest version of all the AMIs it finds for it.
@@ -192,6 +197,7 @@ if there is more than one match, only the latest one will not be deleted (else t
 will keep all AMIs found within 7 days, if they are not in the `--exceptional-amis` list.
 
 ### EBS Volumes
+
 Delete all EBS volumes that are not attached to an instance (stopped or not):
 
     akinaka.py cleanup \
@@ -200,9 +206,11 @@ Delete all EBS volumes that are not attached to an instance (stopped or not):
         ebs
 
 ## RDS
+
 Perform often necessary but complex tasks with RDS.
 
 ### Copy
+
 Copy encrypted RDS instances between accounts:
 
     akinaka.py copy --region eu-west-1 \
@@ -218,6 +226,7 @@ Copy encrypted RDS instances between accounts:
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
 
 ## Container
+
 Limited functionality for interactive with EKS and ECR. At the moment it's just getting a docker login via an assumed role to another assumed role:
 
     akinaka.py container --region eu-west-1 --role-arn arn:aws:iam::0123456789:role/registry-rw get-ecr-login --registry 0123456789
@@ -225,6 +234,7 @@ Limited functionality for interactive with EKS and ECR. At the moment it's just 
 The above will assume the role `arn:aws:iam::0123456789:role/registry-rw` in the account with the registry, and spit out a `docker login` line for you to use — exactly like `aws ecr get-login`, but working for assumed roles.
 
 ## Billing
+
 Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
 
     akinaka.py reporting --region us-east-1 \
@@ -244,8 +254,8 @@ You can specify any integer value to the `--days-ago` flag. It's optional. Defau
 
 You can specify any region to the `--region` flag.
 
-
 ## Contributing
+
 Modules can be added easily by simply dropping them in and adding an entry into `akinaka.py` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
 
 For example, given a module called `akinaka_moo`, and a single command and file called `moo`, add these two lines in the appropriate places of `akinaka.py`:
