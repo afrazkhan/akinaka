@@ -25,12 +25,12 @@ class CopyRDS():
 
     def copy_instance(self):
         logging.info("Starting RDS copy...")
-        rds_source_client   = aws_client.create_client('rds', self.region, self.source_role_arn, 5400)
-        rds_target_client   = aws_client.create_client('rds', self.region, self.target_role_arn, 5400)
-        kms_client          = aws_client.create_client('kms', self.region, self.source_role_arn, 5400)
-        source_account      = aws_client.create_client('sts', self.region, self.source_role_arn, 5400).get_caller_identity()['Account']
-        target_account      = aws_client.create_client('sts', self.region, self.target_role_arn, 5400).get_caller_identity()['Account']
-        target_account_arn  = aws_client.create_client('sts', self.region, self.source_role_arn, 5400).get_caller_identity()['Arn'].split('/boto')[0].replace(':sts::', ':iam::', 1).replace('assumed-role', 'role', 1)
+        rds_source_client   = aws_client.create_client('rds', self.region, self.source_role_arn, 10800)
+        rds_target_client   = aws_client.create_client('rds', self.region, self.target_role_arn, 10800)
+        kms_client          = aws_client.create_client('kms', self.region, self.source_role_arn, 10800)
+        source_account      = aws_client.create_client('sts', self.region, self.source_role_arn, 10800).get_caller_identity()['Account']
+        target_account      = aws_client.create_client('sts', self.region, self.target_role_arn, 10800).get_caller_identity()['Account']
+        target_account_arn  = aws_client.create_client('sts', self.region, self.source_role_arn, 10800).get_caller_identity()['Arn'].split('/boto')[0].replace(':sts::', ':iam::', 1).replace('assumed-role', 'role', 1)
 
         kms_key = self.get_kms_key(kms_client, source_account, target_account, target_account_arn)
 
