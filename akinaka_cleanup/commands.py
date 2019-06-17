@@ -9,7 +9,7 @@ helpers.set_logger()
 @click.option("--role-arns", required=True, help="Role ARNs with assumable permissions, to do the cleanup for")
 @click.option("--not-dry-run", is_flag=True, help="Will do nothing unless supplied")
 @click.pass_context
-def cleanup(ctx, region, role_arns, not_dry_run):
+def cleanup(ctx, region, role_arns, not_dry_run=False):
     ctx.obj = {'region': region, 'role_arns': role_arns, 'not_dry_run': not_dry_run}
     pass
 
@@ -19,7 +19,7 @@ def cleanup(ctx, region, role_arns, not_dry_run):
 @click.option("--retention", type=int, required=True, help="How long to hold AMIs for")
 @click.option("--exceptional-amis", help="List of AMI names to always keep just the latest version of (useful for base images)")
 @click.option("--launch-templates", help="List of Launch Templates to check AMI usage against. If AMI appears in latest version, it will be spared")
-def ami(ctx, retention, not_dry_run, exceptional_amis, launch_templates):
+def ami(ctx, retention, exceptional_amis, launch_templates):
     from .ami import cleanup_amis
     region = ctx.obj.get('region')
     not_dry_run = ctx.obj.get('not_dry_run')
@@ -60,6 +60,3 @@ def ebs(ctx):
     except Exception as e:
         logging.error(e)
         exit(1)
-
-
-
