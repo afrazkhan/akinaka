@@ -11,6 +11,11 @@ do
   esac
 done
 
+if [[ $major == "" && $minor == "" && $patch == ""  ]]; then
+  echo "Usage: release.sh -Mmp"
+  exit 1
+fi
+
 shift $(($OPTIND - 1))
 version=$(git describe --tags `git rev-list --tags --max-count=1`)
 
