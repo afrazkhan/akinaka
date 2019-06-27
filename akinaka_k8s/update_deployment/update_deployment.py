@@ -9,22 +9,22 @@ import logging
 class UpdateDeployment():
     """Modify a Kubernetes YAML deployment spec"""
 
-    def __init__(self, application, new_image=None, new_tag=None, file_path=None, dry_run=False):
-        self.application = application
+    def __init__(self, applications, new_image=None, new_tag=None, file_paths=None, dry_run=False):
+        self.applications = [x.strip() for x in applications.split(',')]
         self.new_image = new_image
         self.new_tag = new_tag
-        self.file_path = file_path
+        self.file_paths = [x.strip() for x in file_paths.split(',')]
         self.dry_run = dry_run
 
         if not self.new_image and not self.new_tag:
             logging.error("At least --new-image or --new-tag need to be given")
             exit(1)
 
-    def read_specs(self):
+    def read_specs(self, file_path):
         yammies = []
 
         try:
-            with open(self.file_path, 'r') as stream:
+            with open(file_path, 'r') as stream:
                 try:
                     for yammy in yaml.safe_load_all(stream):
                         yammies.append(yammy)
@@ -37,8 +37,8 @@ class UpdateDeployment():
             logging.error(exception)
             exit(1)
 
-    def update_spec(self):
-        specs = self.read_specs()
+    def update_spec(self, file_path):
+        specs = self.read_specs(file_path)
 
         for spec in specs:
             if spec['kind'] == 'Deployment' or spec['kind'] == 'Pod':
@@ -50,7 +50,7 @@ class UpdateDeployment():
                 exit(1)
 
             for container in spec_path:
-                if container['name'] == self.application:
+                if container['name'] in self.applications:
                     if self.new_image:
                         image = self.new_image
                     else:
@@ -66,11 +66,13 @@ class UpdateDeployment():
         return specs
 
     def write_new_spec(self):
-        new_spec = yaml.dump_all(self.update_spec(), default_flow_style=False)
+        for file_path in self.file_paths:
 
-        if not self.dry_run:
-            spec_file = open(self.file_path, "w")
-            spec_file.write(new_spec)
-            spec_file.close()
-        else:
-            print(new_spec)
+            new_spec = yaml.dump_all(self.update_spec(file_path), default_flow_style=False)
+
+            if not self.dry_run:
+                spec_file = open(file_path, "w")
+                spec_file.write(new_spec)
+                spec_file.close()
+            else:
+                print(new_spec)

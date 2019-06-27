@@ -11,13 +11,13 @@ def k8s():
     pass
 
 @k8s.command()
-@click.option("--application", required=True, help="The container to update")
+@click.option("--applications", required=True, help="Comma separated list of containers to update")
 @click.option("--new-image", help="Full image path, minus the tag")
 @click.option("--new-tag", help="Tag to update the container's image to")
-@click.option("--file-path", default="kubernetes/deployment.yml", help="Alternative path to deployment spec. Defaults to 'kubernetes/deployment.yml'")
+@click.option("--file-paths", required=True, help="Comma separated string with paths to deployment specs")
 @click.option("--dry-run", is_flag=True, help="If passed, then the new config is written to stdout instead of the originating file")
-def update_deployment(application, new_image, new_tag, file_path, dry_run):
+def update_deployment(applications, new_image, new_tag, file_paths, dry_run):
     from .update_deployment import update_deployment
 
-    k8s_update = update_deployment.UpdateDeployment(application, new_image, new_tag, file_path, dry_run)
+    k8s_update = update_deployment.UpdateDeployment(applications, new_image, new_tag, file_paths, dry_run)
     k8s_update.write_new_spec()
