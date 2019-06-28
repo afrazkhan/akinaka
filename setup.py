@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="akinaka",
     python_requires='>=3.3.0',
-    version="0.2.22",
+    version="0.2.23",
     author="Afraz",
     author_email="afraz@olindata.com",
     description="OlinData's aws cli Extras",
@@ -18,7 +18,8 @@ setuptools.setup(
         'boto3',
         'datetime',
         'click',
-        'pyyaml'
+        'pyyaml',
+        'kubernetes'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
