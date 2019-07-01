@@ -5,10 +5,11 @@ from time import gmtime, strftime
 import logging
 
 helpers.set_logger()
+aws_client = AWS_Client()
 
 @click.group()
 @click.option("--applications", required=True, help="Comma separated list of containers to update")
-@click.option("--server", required=True, help="Kubernetes server address")
+@click.option("--server", required=True, help="Kubernetes server domain (without protocol)")
 @click.option("--token", required=True, help="Authentication token")
 @click.option("--ca-file-path", required=True, help="Path to a file with the server's CA")
 @click.pass_context
@@ -33,7 +34,7 @@ def monitor_deployment(ctx):
 
     from .monitor_deployment import monitor_deployment
     k8s_monitor = monitor_deployment.MonitorDeployment(configuration, applications)
-    k8s_monitor.list_all()
+    k8s_monitor.deploy_update()
 
 
 @k8s.command()

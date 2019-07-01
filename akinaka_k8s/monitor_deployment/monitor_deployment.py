@@ -11,5 +11,6 @@ class MonitorDeployment():
         self.api = client.CoreV1Api()
 
 
-    def list_all(self):
+    # kubectl --certificate-authority ca.crt --server $K8S_URL --token $K8S_TOKEN apply -f full_spec.yml
+    def deploy_update(self):
         self.api.list_pod_for_all_namespaces(watch=False)
