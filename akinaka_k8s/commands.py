@@ -9,7 +9,7 @@ aws_client = AWS_Client()
 
 @click.group()
 @click.option("--applications", required=True, help="Comma separated list of containers to update")
-@click.option("--server", required=True, help="Kubernetes server domain (without protocol)")
+@click.option("--server", required=True, help="URL that Kubernetes control plane can be reached (with protocol)")
 @click.option("--token", required=True, help="Authentication token")
 @click.option("--ca-file-path", required=True, help="Path to a file with the server's CA")
 @click.pass_context
@@ -17,7 +17,7 @@ def k8s(ctx, applications, server, token, ca_file_path):
     from kubernetes import client, config
 
     configuration = client.Configuration()
-    configuration.host = "https://{}".format(server)
+    configuration.host = server
     configuration.ssl_ca_cert = ca_file_path
     configuration.debug = True
     configuration.api_key={"authorization":"Bearer {}".format(token)}
@@ -41,7 +41,7 @@ def monitor_deployment(ctx):
 @click.option("--new-image", help="Full image path, minus the tag")
 @click.option("--new-tag", help="Tag to update the container's image to")
 @click.option("--file-paths", required=True, help="Comma separated string with paths to deployment specs")
-@click.option("--dry-run", is_flag=True, help="If passed, then the new config is written to stdout instead of the originating file")
+@click.option("--dry-run", is_flag=True, help="Flag: Write config to stdout instead of the originating file")
 @click.pass_context
 def update_deployment(ctx, new_image, new_tag, file_paths, dry_run):
     applications = ctx.obj.get('applications')
