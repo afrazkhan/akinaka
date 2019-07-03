@@ -65,8 +65,8 @@ class UpdateDeployment():
                         tag = container['image'].split(":")[-1]
 
                     container['image'] = "{image}:{tag}".format(image = image, tag = tag)
-
-                logging.warning("Didn't find any containers from the array {}, and didn't change any files".format(self.applications))
+                else:
+                    logging.warning("Didn't find any containers from the array {}, and didn't change any files".format(self.applications))
 
         return specs
 

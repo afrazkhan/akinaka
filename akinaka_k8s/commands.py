@@ -12,19 +12,22 @@ aws_client = AWS_Client()
 @click.option("--server", required=True, help="URL that Kubernetes control plane can be reached (with protocol)")
 @click.option("--token", required=True, help="Authentication token")
 @click.option("--ca-file-path", required=True, help="Path to a file with the server's CA")
+@click.option("--skip-auth", is_flag=True, help="Temporary flag for skipping auth while we don't need it for other commands")
 @click.pass_context
-def k8s(ctx, applications, server, token, ca_file_path):
-    from kubernetes import client, config
+def k8s(ctx, applications, server, token, ca_file_path, skip_auth):
+    if skip_auth:
+        ctx.obj = {'applications': applications}
+    else:
+        from kubernetes import client, config
 
-    configuration = client.Configuration()
-    configuration.host = server
-    configuration.ssl_ca_cert = ca_file_path
-    configuration.debug = True
-    configuration.api_key={"authorization":"Bearer {}".format(token)}
+        configuration = client.Configuration()
+        configuration.host = server
+        configuration.ssl_ca_cert = ca_file_path
+        configuration.debug = True
+        configuration.api_key={"authorization":"Bearer {}".format(token)}
 
-    ctx.obj = {'configuration': configuration, 'applications': applications}
+        ctx.obj = {'configuration': configuration, 'applications': applications}
 
-    pass
 
 @k8s.command()
 @click.pass_context
@@ -34,7 +37,7 @@ def monitor_deployment(ctx):
 
     from .monitor_deployment import monitor_deployment
     k8s_monitor = monitor_deployment.MonitorDeployment(configuration, applications)
-    k8s_monitor.deploy_update()
+    k8s_monitor.monitor_update()
 
 
 @k8s.command()
@@ -45,7 +48,6 @@ def monitor_deployment(ctx):
 @click.pass_context
 def update_deployment(ctx, new_image, new_tag, file_paths, dry_run):
     applications = ctx.obj.get('applications')
-    configuration = ctx.obj.get('configuration')
 
     from .update_deployment import update_deployment
 
