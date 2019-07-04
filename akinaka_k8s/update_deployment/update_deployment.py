@@ -39,7 +39,6 @@ class UpdateDeployment():
 
     def update_spec(self, file_path):
         specs = self.read_specs(file_path)
-        found = False
 
         for spec in specs:
             if spec['kind'] == 'Deployment' or spec['kind'] == 'Pod':
@@ -52,8 +51,6 @@ class UpdateDeployment():
 
             for container in spec_path:
                 if container['name'] in self.applications:
-                    found = True
-
                     if self.new_image:
                         image = self.new_image
                     else:
@@ -66,7 +63,10 @@ class UpdateDeployment():
 
                     container['image'] = "{image}:{tag}".format(image = image, tag = tag)
                 else:
-                    logging.warning("Didn't find any containers from the array {}, and didn't change any files".format(self.applications))
+                    logging.warning("Didn't find every container searched for from the array {}, and didn't change any files".format(self.applications))
+
+            # spec['metadata']['annotations']['kubernetes.io/change-cause'] = self.new_tag
+
 
         return specs
 
