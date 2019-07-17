@@ -92,31 +92,30 @@ class CopyRDS():
         # create a Customer Managed KMS key, needed to be able to share the encrypted snapshot
         kms_key = kms_client.create_key(
             Description="Shared encryption key with AWS account {}".format(target_account_arn),
-            Policy="""{
-        "Version": "2012-10-17",
-        "Id": "key-default-1",
-        "Statement": [
-            {
-                "Sid": "Enable IAM User Permissions",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": "arn:aws:iam::%s:root"
-                },
-                "Action": "kms:*",
-                "Resource": "*"
-            },
-            {
-                "Sid": "Allow use of the key by the %s",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": "%s"
-                },
-                "Action": "kms:*",
-                "Resource": "*"
-            }
-        ]
-    }
-    """ % (source_account, target_account, target_account_arn)
+            Policy= """{
+                            "Version": "2012-10-17",
+                            "Id": "key-default-1",
+                            "Statement": [
+                                {
+                                    "Sid": "Enable IAM User Permissions",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "AWS": "arn:aws:iam::%s:root"
+                                    },
+                                    "Action": "kms:*",
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "Allow use of the key by the %s",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "AWS": "%s"
+                                    },
+                                    "Action": "kms:*",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }""" % (source_account, target_account, target_account_arn)
         )
 
         # add an alias to the key so we can later more easily determine if the key
@@ -141,7 +140,8 @@ class CopyRDS():
             copy = rds_client.copy_db_snapshot(
                 SourceDBSnapshotIdentifier=shared_snapshot['DBSnapshotArn'],
                 TargetDBSnapshotIdentifier=target_db_snapshot_id,
-                KmsKeyId=kms_key['KeyMetadata']['Arn']
+                KmsKeyId=kms_key['KeyMetadata']['Arn'],
+                Tags=[ { 'Key': 'akinaka-made', 'Value': 'true' }, ]
             )
             logging.info("Copy created.")
             return copy['DBSnapshot']
@@ -234,6 +234,7 @@ class CopyRDS():
             snapshot = rds_client.create_db_snapshot(
                 DBInstanceIdentifier=source_instance_name,
                 DBSnapshotIdentifier="{}-{:%Y-%m-%d}".format(source_instance_name, today),
+                Tags=[ { 'Key': 'akinaka-made', 'Value': 'true' }, ]
             )
             logging.info("Snapshot created.")
             return snapshot['DBSnapshot']
@@ -275,7 +276,8 @@ class CopyRDS():
             copy = rds_client.copy_db_snapshot(
                 SourceDBSnapshotIdentifier=snapshot['DBSnapshotIdentifier'],
                 TargetDBSnapshotIdentifier=target_db_snapshot_id,
-                KmsKeyId=kms_key['KeyMetadata']['Arn']
+                KmsKeyId=kms_key['KeyMetadata']['Arn'],
+                Tags=[ { 'Key': 'akinaka-made', 'Value': 'true' }, ]
             )
             logging.info("Snapshot created.")
             return copy['DBSnapshot']
