@@ -60,3 +60,21 @@ def ebs(ctx):
     except Exception as e:
         logging.error(e)
         exit(1)
+
+@cleanup.command()
+@click.option("--search-tags", required=True, help="Comma separated list of tags attached to snapshots to be deleted")
+@click.pass_context
+def rds(ctx, search_tags):
+    from .rds import cleanup_snapshots
+    region = ctx.obj.get('region')
+    not_dry_run = ctx.obj.get('not_dry_run')
+    role_arns = ctx.obj.get('role_arns')
+    role_arns = role_arns.split(" ")
+
+    try:
+        snapshots = cleanup_snapshots.CleanupSnapshots(region, role_arns, search_tags, not_dry_run)
+        snapshots.cleanup()
+        exit(0)
+    except Exception as e:
+        logging.error(e)
+        exit(1)

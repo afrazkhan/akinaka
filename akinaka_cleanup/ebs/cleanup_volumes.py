@@ -42,7 +42,7 @@ class CleanupVolumes():
 
     def cleanup(self):
         for role in self.role_arns:
-            logging.error("\nProcessing account: {}".format(role))
+            logging.error("Processing account: {}".format(role))
             volumes_to_delete = self.list_available_volumes(role)
 
             if self.not_dry_run:
@@ -52,6 +52,3 @@ class CleanupVolumes():
                 logging.info("These are the volumes I would have deleted if you gave me --not-dry-run:\n")
                 for volume in volumes_to_delete:
                     logging.info("Volume: {}\n".format(volume['VolumeId']))
-
-
-

@@ -12,6 +12,7 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
   - [Cleanups](#cleanups)
     - [AMIs](#amis)
     - [EBS Volumes](#ebs-volumes)
+    - [RDS Snapshots](#rds-snapshots)
   - [RDS](#rds)
     - [Copy](#copy)
   - [Container](#container)
@@ -161,7 +162,7 @@ you think you are.
 
 ## Cleanups
 
-Currently AMI and EBS cleanups are supported.
+Currently AMI, EBS, and RDS snapshot cleanups are supported.
 
 Common option:
 
@@ -204,6 +205,16 @@ Delete all EBS volumes that are not attached to an instance (stopped or not):
         --region eu-west-1 \
         --role-arns "arn:aws:iam::198765432100:role/management_assumable arn:aws:iam::123456789100:role/management_assumable" \
         ebs
+
+### RDS Snapshots
+
+    This will delete all snapshots tagged "akinaka-made":
+    
+    akinaka.py cleanup \
+        --not-dry-run \
+        --region eu-west-1 \
+        --role-arns "arn:aws:iam::876521782800:role/OlinDataAssumedAdministrator" \
+        rds --tags "akinaka-made"
 
 ## RDS
 

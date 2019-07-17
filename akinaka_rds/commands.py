@@ -1,7 +1,7 @@
 import click
 from akinaka_libs import helpers
 import logging
-
+from akinaka_cleanup.rds import cleanup_snapshots
 helpers.set_logger()
 
 @click.group()
@@ -30,8 +30,21 @@ def rds(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_n
     region = ctx.obj.get('region')
 
     try:
-        rds_copy = copy_rds.CopyRDS(region, source_role_arn, target_role_arn, snapshot_style, source_instance_name, overwrite_target, target_security_group, target_db_subnet, target_instance_name)
+        rds_copy = copy_rds.CopyRDS(region,
+                                    source_role_arn,
+                                    target_role_arn,
+                                    snapshot_style,
+                                    source_instance_name,
+                                    overwrite_target,
+                                    target_security_group,
+                                    target_db_subnet,
+                                    target_instance_name)
         rds_copy.copy_instance()
+
+        logging.info("Will now delete useless snapshots")
+        snapshots = cleanup_snapshots.CleanupSnapshots(region, [source_role_arn], ["akinaka-made"], True)
+        snapshots.cleanup()
+
         exit(0)
     except Exception as e:
         logging.error(e)
