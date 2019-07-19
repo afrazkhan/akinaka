@@ -214,7 +214,8 @@ Delete all EBS volumes that are not attached to an instance (stopped or not):
         --not-dry-run \
         --region eu-west-1 \
         --role-arns "arn:aws:iam::876521782800:role/OlinDataAssumedAdministrator" \
-        rds --tags "akinaka-made"
+        rds \
+            --tags "akinaka-made"
 
 ## RDS
 

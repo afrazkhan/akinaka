@@ -12,8 +12,8 @@ class CleanupSnapshots():
 
     def __init__(self, region, role_arns, search_tags, not_dry_run):
           self.region = region
-          self.role_arns = role_arns
-          self.search_tags = search_tags
+          self.role_arns = role_arns.split(",")
+          self.search_tags = search_tags.split(",")
           self.not_dry_run = not_dry_run
 
     def list_tagged_snapshots(self, role_arn, search_tags):

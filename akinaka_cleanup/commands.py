@@ -69,7 +69,7 @@ def rds(ctx, search_tags):
     region = ctx.obj.get('region')
     not_dry_run = ctx.obj.get('not_dry_run')
     role_arns = ctx.obj.get('role_arns')
-    role_arns = role_arns.split(" ")
+    role_arns = role_arns
 
     try:
         snapshots = cleanup_snapshots.CleanupSnapshots(region, role_arns, search_tags, not_dry_run)
