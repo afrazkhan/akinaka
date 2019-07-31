@@ -42,9 +42,10 @@ def rds(ctx, source_role_arn, target_role_arn, snapshot_style, source_instance_n
         rds_copy.copy_instance()
 
         logging.info("Will now delete useless snapshots")
-        snapshots = cleanup_snapshots.CleanupSnapshots(region,
+        snapshots = cleanup_snapshots.CleanupSnapshots(
+            region,
             "{},{}".format(source_role_arn,target_role_arn),
-            ["akinaka-made"],
+            "akinaka-made",
             True
         )
         snapshots.cleanup()
