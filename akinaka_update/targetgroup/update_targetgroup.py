@@ -2,15 +2,18 @@
 
 from akinaka_client.aws_client import AWS_Client
 from akinaka_libs import exceptions
+from akinaka_libs import helpers
 import logging
 
 aws_client = AWS_Client()
 
 class TargetGroup():
-    def __init__(self, region, role_arn, new_asg):
+    def __init__(self, region, role_arn, new_asg, log_level):
         self.region = region
         self.role_arn = role_arn
         self.new_asg = new_asg
+        self.log_level = log_level
+        logging.getLogger().setLevel(log_level)
 
     def get_application_name(self):
         asg_split = self.new_asg.split('-')[0:-1]
@@ -23,7 +26,7 @@ class TargetGroup():
         """
 
         return_list = []
-        
+
         # Yes a regexp is smarter, but don't be smart, be safe ;)
         asg_split = wanted_asg.split('-')[0:-1]
         wanted_asg_prefix = '-'.join(asg_split)
@@ -31,7 +34,9 @@ class TargetGroup():
         for asg in asgs:
             if wanted_asg_prefix in asg['AutoScalingGroupName']:
                 return_list.append(asg)
-        
+
+        logging.debug("filter_out_unwanted_asgs(): Wanted ASG prefix: {}, Return list: {}".format(wanted_asg_prefix, return_list))
+
         return return_list
 
     def group_asgs_by_status(self, asgs, wanted_asg):
@@ -39,10 +44,10 @@ class TargetGroup():
         Returns a dict of 'active_asg' and 'inactive_asg' dicts with only the ASGs
         matching 'wanted_asgs'
         """
-        
+
         inactive_asg = []
         active_asg = []
-        
+
         for asg in asgs['AutoScalingGroups']:
             # If the ASG's TargetGroupARNs attribute is empty, it's the inactive one
             if len(asg['TargetGroupARNs']) < 1 and asg['AutoScalingGroupName'] == self.new_asg:
@@ -55,6 +60,8 @@ class TargetGroup():
         active_asg = self.filter_out_unwanted_asgs(active_asg, wanted_asg)
         inactive_asg = self.filter_out_unwanted_asgs(inactive_asg, wanted_asg)
 
+        logging.debug("group_asgs_by_status(): active_asg: {}, inactive_asg: {} ".format(active_asg, inactive_asg))
+
         return {'active_asg': active_asg, 'inactive_asg': inactive_asg}
 
     def switch_asg(self):
@@ -65,6 +72,8 @@ class TargetGroup():
         asgs_by_status = self.group_asgs_by_status(asgs, self.new_asg)
         active_asg = asgs_by_status['active_asg']
         inactive_asg = asgs_by_status['inactive_asg']
+
+        logging.debug("switch_asg(): asgs_by_status: {}, active_asg: {}, inactive_asg: {}".format(asgs_by_status, active_asg, inactive_asg))
 
         # Exit program if there is no existing active auto scaling groups to perform a switch over
         if len(inactive_asg) < 1 or len(active_asg) < 1:

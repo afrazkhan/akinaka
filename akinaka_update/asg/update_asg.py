@@ -34,17 +34,17 @@ class ASG():
         target_group_arn = self.get_target_group_arn()
         active_asg = self.get_active_asg(target_group_arn)
         asg_split = active_asg.split('-')[0:-1]
-        
+
         return '-'.join(asg_split)
 
     def work_out_new_asg(self):
         if self.asg is not None:
             logging.info("We've been given the ASG name as an argument")
             return self.asg
-        
-        target_group_arn = self.get_target_group_arn()        
+
+        target_group_arn = self.get_target_group_arn()
         active_asg = self.get_active_asg(target_group_arn)
-        new_asg = self.get_inactive_asg(active_asg)        
+        new_asg = self.get_inactive_asg(active_asg)
 
         return new_asg
 
@@ -54,7 +54,7 @@ class ASG():
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(new_asg))
         self.update_launch_template(new_asg, new_ami, self.get_lt_name(new_asg))
-        
+
         logging.info("Scaling ASG down")
         self.scale(new_asg, 0, 0, 0)
         while not self.asg_is_empty(new_asg):
@@ -63,11 +63,11 @@ class ASG():
 
         logging.info("Scaling ASG back up")
         self.scale(new_asg, self.scale_to, self.scale_to, self.scale_to)
-        
+
         while len(self.get_auto_scaling_group_instances(new_asg)) < 1:
             logging.info("Waiting for instances in ASG to start ...")
             sleep(10)
-            
+
         logging.info("First instance has started")
 
         # Try to get information for an instance in the new ASG 20 times
@@ -84,7 +84,7 @@ class ASG():
                 logging.info("Error was: {}".format(error))
 
         # Show console output for first instance up until it's Lifecycle Hook has passed
-        while self.get_auto_scaling_group_instances(auto_scaling_group_id=new_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":        
+        while self.get_auto_scaling_group_instances(auto_scaling_group_id=new_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":
             try:
                 logging.info("Attempting to retrieve console output from first instance up -- this will not work for non-nitro hypervisor VMs")
                 logging.info(self.get_instance_console_output(first_new_instance)['Output'])
@@ -112,10 +112,10 @@ class ASG():
     def instance_state(self, instance):
         ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
         instance_states = ec2_client.describe_instance_status(IncludeAllInstances=True, InstanceIds=[instance])
-        
+
         while 'InstanceStatuses' not in instance_states:
             instance_states = ec2_client.describe_instance_status(InstanceIds=[instance])
-        
+
         return instance_states['InstanceStatuses'][0]['InstanceState']['Name']
 
     def get_lt_name(self, asg):
@@ -123,7 +123,7 @@ class ASG():
         lt_info = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])
 
         try:
-            return lt_info['AutoScalingGroups'][0]['LaunchTemplate']['LaunchTemplateName']    
+            return lt_info['AutoScalingGroups'][0]['LaunchTemplate']['LaunchTemplateName']
         except Exception as e:
             raise exceptions.AkinakaCriticalException("{}: Likely couldn't find the ASG you're trying to update".format(e))
 
@@ -160,7 +160,7 @@ class ASG():
     def get_target_groups_instances(self, target_group_arn):
         """Returns an array of instance IDs belonging to the target group specified"""
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
-        
+
         target_groups_instances = []
 
         these_target_group_instances = alb_client.describe_target_health(TargetGroupArn=target_group_arn)['TargetHealthDescriptions']
@@ -172,18 +172,18 @@ class ASG():
         #       from stale ASGs, or anything else is off in them, you will get unexpected results
         for instance in these_target_group_instances:
             target_groups_instances.append(instance['Target']['Id'])
-        
-        return target_groups_instances 
+
+        return target_groups_instances
 
     def get_active_asg(self, target_groups):
         ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
 
         target_groups_instances = self.get_target_groups_instances(target_groups)
-        
+
         instances_with_tags = {}
 
         raw_instances_reservations = ec2_client.describe_instances(InstanceIds=target_groups_instances)['Reservations']
-            
+
         for reservation in raw_instances_reservations:
             for instance in reservation['Instances']:
                 instances_with_tags[instance['InstanceId']] = instance['Tags']
@@ -199,7 +199,7 @@ class ASG():
 
         return next(iter(instances_with_asg.values()))
 
-    def get_inactive_asg(self, active_asg):        
+    def get_inactive_asg(self, active_asg):
         asg_parts = active_asg.split('-')
         active_colour = asg_parts[-1]
 
@@ -286,7 +286,7 @@ class ASG():
                         instance_id = i['InstanceId'],
                         instance_state = i['HealthStatus'],
                         instance_lifecycle_state = i['LifecycleState']
-                    )   
+                    )
                 )
 
                 logging.info("Instance {instance_id} is {instance_lifecycle_state}".format(
@@ -294,10 +294,10 @@ class ASG():
                         instance_lifecycle_state = i['LifecycleState']
                     )
                 )
-            
+
 
         return target_instances
-    
+
     def asg_is_empty(self, auto_scaling_group_id):
         asg_instances = self.get_auto_scaling_group_instances(auto_scaling_group_id)
 
@@ -306,7 +306,7 @@ class ASG():
     def asgs_healthy_instances(self, auto_scaling_group_id):
         asg_instances = self.get_auto_scaling_group_instances(auto_scaling_group_id)
         healthy_instances = []
-    
+
         for i in asg_instances:
             if i['LifecycleState'] == "InService":
                 healthy_instances.append(i)

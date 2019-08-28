@@ -13,5 +13,5 @@ def seconds_from_hours(hours):
 def log(message):
   print(message)
 
-def set_logger():
-    return logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S%z')
+def set_logger(level='INFO'):
+    return logging.basicConfig(level=level, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S%z')

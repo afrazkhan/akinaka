@@ -4,14 +4,12 @@ from akinaka_libs import helpers
 from time import gmtime, strftime
 import logging
 
-helpers.set_logger()
-
 @click.group()
 @click.option("--region", required=True, help="Region your resources are located in")
 @click.option("--role-arn", required=True, help="Role ARN which contains necessary assume permissions")
 @click.pass_context
 def update(ctx, region, role_arn):
-    ctx.obj = {'region': region, 'role_arn': role_arn}
+    ctx.obj = {'region': region, 'role_arn': role_arn, 'log_level': ctx.obj.get('log_level')}
     pass
 
 def set_deploy_status(verb, region, role_arn, application, reset=None):
@@ -84,11 +82,12 @@ def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
 def targetgroup(ctx, new_asg_target):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
+    log_level = ctx.obj.get('log_level')
 
-    from .targetgroup import update_targetgroup    
+    from .targetgroup import update_targetgroup
 
     try:
-        target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target)
+        target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target, log_level)
         target_groups.switch_asg()
         # We've successfully deployed, so set the status of deploy to "false"
         set_deploy_status("stop", region, role_arn, target_groups.get_application_name())
@@ -96,4 +95,3 @@ def targetgroup(ctx, new_asg_target):
     except Exception as e:
         logging.error("{}".format(e))
         exit(1)
-
