@@ -20,7 +20,12 @@ class ASG():
         self.role_arn = role_arn
         self.asg = asg
         self.target_group = target_group
-        self.scale_to = scale_to if scale_to else 1
+
+        if not scale_to:
+            asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+            asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[self.asg])['AutoScalingGroups'][0]
+
+        self.scale_to = scale_to if scale_to else asg['DesiredCapacity']
 
     def get_application_name(self):
         """
