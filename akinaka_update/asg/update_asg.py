@@ -20,12 +20,7 @@ class ASG():
         self.role_arn = role_arn
         self.asg = asg
         self.target_group = target_group
-
-        if not scale_to:
-            asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
-            asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[self.asg])['AutoScalingGroups'][0]
-
-        self.scale_to = scale_to if scale_to else asg['DesiredCapacity']
+        self.scale_to = scale_to if scale_to else None
 
     def get_application_name(self):
         """
@@ -59,6 +54,8 @@ class ASG():
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(new_asg))
         self.update_launch_template(new_asg, new_ami, self.get_lt_name(new_asg))
+
+        self.scale_to = self.get_current_scale(new_asg)
 
         logging.info("Scaling ASG down")
         self.scale(new_asg, 0, 0, 0)
@@ -275,6 +272,18 @@ class ASG():
         )
 
         return response
+
+    def get_current_scale(self, asg):
+        """
+        Gets the current scale of the given ASG, presuming that min, max, and desired
+        are all the same
+        """
+
+        if not self.scale_to:
+            asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+            asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]
+
+            return asg['DesiredCapacity']
 
     def get_auto_scaling_group_instances(self, auto_scaling_group_id, instance_ids=None):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
