@@ -64,7 +64,7 @@ class ASG():
             sleep(10)
 
         logging.info("Scaling ASG back up")
-        self.scale(new_asg, self.scale_to, self.scale_to, self.scale_to)
+        self.scale(new_asg, self.scale_to['min'], self.scale_to['max'], self.scale_to['capacity'])
 
         while len(self.get_auto_scaling_group_instances(new_asg)) < 1:
             logging.info("Waiting for instances in ASG to start ...")
@@ -275,15 +275,14 @@ class ASG():
 
     def get_current_scale(self, asg):
         """
-        Gets the current scale of the given ASG, presuming that min, max, and desired
-        are all the same
+        Gets the current scales of the given ASG; {'desired', 'min', 'max'}
         """
 
         if not self.scale_to:
             asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
             asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]
 
-            return asg['DesiredCapacity']
+            return {"desired": asg['DesiredCapacity'], "min": asg['MinSize'], "max": asg['MaxSize']}
 
     def get_auto_scaling_group_instances(self, auto_scaling_group_id, instance_ids=None):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)

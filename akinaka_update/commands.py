@@ -54,6 +54,7 @@ def reset(ctx, application_name):
 @click.option("--lb", help="Loadbalancer to work out targetgroup from -- mutually exclusive with --asg and --target-group")
 @click.option("--target-group", "target_group", help="Target Group to discover the ASG for updating. Mutually exclusive with --asg and --lb")
 @click.option("--asg", "asg_name", help="ASG we're updating -- mutually exclusive with --lb and --target-group")
+# FIXME: This will be broken now, and should instead be 3 separate options for min, max, and desired
 @click.option("--scale-to", "scale_to", help="Optionally set the number for the ASG to scale back up to. Defaults to 1")
 @click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
 def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
