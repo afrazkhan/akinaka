@@ -13,14 +13,12 @@ aws_client = AWS_Client()
 class ASG():
     """All the methods needed to perform a blue/green deploy"""
 
-    def __init__(self, ami, region, role_arn, loadbalancer=None, asg=None, target_group=None, scale_to=None):
+    def __init__(self, region, role_arn, loadbalancer=None, asg=None, target_group=None):
         self.loadbalancer = loadbalancer
-        self.ami = ami
         self.region = region
         self.role_arn = role_arn
         self.asg = asg
         self.target_group = target_group
-        self.scale_to = scale_to if scale_to else None
 
     def get_application_name(self):
         """
@@ -58,17 +56,15 @@ class ASG():
         inactive_asg = self.get_inactive_asg(self.asg)
         self.scale(inactive_asg, 0, 0, 0)
 
-    def do_update(self):
+    def do_update(self, ami):
         inactive_asg = self.asgs_by_liveness()['inactive_asg']
         active_asg = self.asgs_by_liveness()['active_asg']
-        new_ami = self.ami
+        new_ami = ami
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
         self.update_launch_template(inactive_asg, new_ami, self.get_lt_name(inactive_asg))
 
-        # Honour self.scale_to values if present
-        if not self.scale_to:
-            self.scale_to = self.get_current_scale(active_asg)
+        scale_to = self.get_current_scale(active_asg)
 
         logging.info("Scaling ASG down")
         self.scale(inactive_asg, 0, 0, 0)
@@ -79,9 +75,9 @@ class ASG():
         logging.info("Scaling ASG back up")
         self.scale(
             auto_scaling_group_id = inactive_asg,
-            min_size = self.scale_to['min'],
-            max_size = self.scale_to['max'],
-            desired =  self.scale_to['capacity']
+            min_size = scale_to['min'],
+            max_size = scale_to['max'],
+            desired =  scale_to['capacity']
         )
 
         while len(self.get_auto_scaling_group_instances(inactive_asg)) < 1:
@@ -113,7 +109,7 @@ class ASG():
             sleep(10)
 
         # Wait for remaining instances (if any) to come up too
-        while len(self.asgs_healthy_instances(inactive_asg)) < self.scale_to:
+        while len(self.asgs_healthy_instances(inactive_asg)) < scale_to:
             logging.info("Waiting for all instances to be healthy ...")
 
         logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")

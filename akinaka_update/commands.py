@@ -65,9 +65,8 @@ def reset(ctx, application_name):
 @click.option("--lb", help="Loadbalancer to work out targetgroup from -- mutually exclusive with --asg and --target-group")
 @click.option("--target-group", "target_group", help="Target Group to discover the ASG for updating. Mutually exclusive with --asg and --lb")
 @click.option("--asg", "asg_name", help="ASG we're updating -- mutually exclusive with --lb and --target-group")
-@click.option("--scale-to", "scale_to", help="Optionally set the number for the ASG to scale back up to. Must in the form 'MIN_INT,MAX_INT,DESIRED_INT'")
 @click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
-def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
+def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
     """
     Update an ASG by scaling it down and up again with the new launch template configuration. Can be
     used in three different modes, the first two being geared towards blue/green deploys:
@@ -86,23 +85,16 @@ def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
 
-    scale_to = scale_to.replace(" ", "").split(",")
-    scale_to = {
-        "min": scale_to[0],
-        "max": scale_to[1],
-        "capacity": scale_to[2]
-    }
-
     from .asg import update_asg
 
-    asg = update_asg.ASG(ami, region, role_arn, lb, asg_name, target_group, scale_to)
+    asg = update_asg.ASG(region, role_arn, lb, asg_name, target_group)
     application = asg.get_application_name()
 
     if lb or target_group:
         if not skip_status_check:
             set_deploy_status("start", region, role_arn, application)
 
-    asg.do_update()
+    asg.do_update(ami)
     exit(0)
 
 @update.command()
@@ -135,14 +127,17 @@ def targetgroup(ctx, new_asg_target):
 @click.option("--active-asg", "active_asg", help="Name of the currently active ASG")
 @click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
 def scale_down_inactive(ctx, active_asg, skip_status_check):
-    """Given an active ASG, scale down the inactive one. Only useful for blue/green deploys"""
+    """
+    Given an the name of the _active_ ASG, scale down the inactive one. Only useful for
+    blue/green deploys
+    """
 
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
 
     from .asg import update_asg
 
-    asg = update_asg.ASG(ami=None, region=region, role_arn=role_arn, asg=active_asg)
+    asg = update_asg.ASG(region=region, role_arn=role_arn, asg=active_asg)
 
     asg.scale_down_inactive()
     exit(0)
