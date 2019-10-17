@@ -39,7 +39,6 @@ def set_deploy_status(verb, region, role_arn, application, reset=None):
     )
     logging.info("Deployment status for {} updated".format(application))
 
-
 @update.command()
 @click.pass_context
 @click.option("--application-name", required=True, help="The application name (target group) to reset unlock for re-running the 'asg' subcommand on")
@@ -54,8 +53,7 @@ def reset(ctx, application_name):
 @click.option("--lb", help="Loadbalancer to work out targetgroup from -- mutually exclusive with --asg and --target-group")
 @click.option("--target-group", "target_group", help="Target Group to discover the ASG for updating. Mutually exclusive with --asg and --lb")
 @click.option("--asg", "asg_name", help="ASG we're updating -- mutually exclusive with --lb and --target-group")
-# FIXME: This will be broken now, and should instead be 3 separate options for min, max, and desired
-@click.option("--scale-to", "scale_to", help="Optionally set the number for the ASG to scale back up to. Defaults to 1")
+@click.option("--scale-to", "scale_to", help="Optionally set the number for the ASG to scale back up to. Must in the form 'MIN_INT,MAX_INT,DESIRED_INT'")
 @click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
 def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
     if [lb, asg_name, target_group].count(None) < 2:
@@ -63,6 +61,13 @@ def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
 
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
+
+    scale_to = scale_to.replace(" ", "").split(",")
+    scale_to = {
+        "min": scale_to[0],
+        "max": scale_to[1],
+        "capacity": scale_to[2]
+    }
 
     from .asg import update_asg
 
@@ -76,6 +81,20 @@ def asg(ctx, ami, lb, asg_name, target_group, scale_to, skip_status_check):
     asg.do_update()
     exit(0)
 
+@update.command()
+@click.pass_context
+@click.option("--active-asg", "active_asg", help="ASG we're updating -- mutually exclusive with --lb and --target-group")
+@click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
+def scale_down_inactive(ctx, active_asg, skip_status_check):
+    region = ctx.obj.get('region')
+    role_arn = ctx.obj.get('role_arn')
+
+    from .asg import update_asg
+
+    asg = update_asg.ASG(ami=None, region=region, role_arn=role_arn, asg=active_asg)
+
+    asg.scale_down_inactive()
+    exit(0)
 
 @update.command()
 @click.pass_context

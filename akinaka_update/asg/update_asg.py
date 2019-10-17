@@ -37,41 +37,54 @@ class ASG():
 
         return '-'.join(asg_split)
 
-    def work_out_new_asg(self):
+    def asgs_by_liveness(self):
+        """Return dict of '{inactive: ASG, active: ASG}'"""
+
         if self.asg is not None:
             logging.info("We've been given the ASG name as an argument")
-            return self.asg
+            # NOTE: "inactive_asg" is a misnomer at this point, since when we already have the ASG
+            #       name, it is also the active ASG, because this case is used for non-blue/green ASGs
+            return {"inactive_asg": self.asg, "active_asg": self.asg}
 
         target_group_arn = self.get_target_group_arn()
         active_asg = self.get_active_asg(target_group_arn)
-        new_asg = self.get_inactive_asg(active_asg)
+        inactive_asg = self.get_inactive_asg(active_asg)
 
-        return new_asg
+        return {"inactive_asg": inactive_asg, "active_asg": active_asg}
+
+    def scale_down_inactive(self):
+        # NOTE: We're making the heavy presumption here that the _active_ ASG is the one we've been
+        #       given from the command line
+        inactive_asg = self.get_inactive_asg(self.asg)
+        self.scale(inactive_asg, 0, 0, 0)
 
     def do_update(self):
-        new_asg = self.work_out_new_asg()
+        inactive_asg = self.asgs_by_liveness()['inactive_asg']
+        active_asg = self.asgs_by_liveness()['active_asg']
         new_ami = self.ami
 
-        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(new_asg))
-        self.update_launch_template(new_asg, new_ami, self.get_lt_name(new_asg))
+        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
+        self.update_launch_template(inactive_asg, new_ami, self.get_lt_name(inactive_asg))
 
-        self.scale_to = self.get_current_scale(new_asg)
+        # Honour self.scale_to values if present
+        if not self.scale_to:
+            self.scale_to = self.get_current_scale(active_asg)
 
         logging.info("Scaling ASG down")
-        self.scale(new_asg, 0, 0, 0)
-        while not self.asg_is_empty(new_asg):
+        self.scale(inactive_asg, 0, 0, 0)
+        while not self.asg_is_empty(inactive_asg):
             logging.info("Waiting for instances in ASG to terminate")
             sleep(10)
 
         logging.info("Scaling ASG back up")
         self.scale(
-            auto_scaling_group_id = new_asg,
+            auto_scaling_group_id = inactive_asg,
             min_size = self.scale_to['min'],
             max_size = self.scale_to['max'],
             desired =  self.scale_to['capacity']
         )
 
-        while len(self.get_auto_scaling_group_instances(new_asg)) < 1:
+        while len(self.get_auto_scaling_group_instances(inactive_asg)) < 1:
             logging.info("Waiting for instances in ASG to start ...")
             sleep(10)
 
@@ -80,18 +93,18 @@ class ASG():
         # Try to get information for an instance in the new ASG 20 times
         for i in range(20):
             try:
-                first_new_instance = self.get_first_new_instance(new_asg)
+                first_new_instance = self.get_first_new_instance(inactive_asg)
                 if i == 20:
                     raise exceptions.AkinakaCriticalException
                 break
             except exceptions.AkinakaLoggingError as error:
                 logging.info("Retry {}".format(i))
                 logging.info("Problem in getting data for first new ASG instance")
-                logging.info("get_auto_scaling_group_instances() returned: {}".format(self.get_auto_scaling_group_instances(new_asg)))
+                logging.info("get_auto_scaling_group_instances() returned: {}".format(self.get_auto_scaling_group_instances(inactive_asg)))
                 logging.info("Error was: {}".format(error))
 
         # Show console output for first instance up until it's Lifecycle Hook has passed
-        while self.get_auto_scaling_group_instances(auto_scaling_group_id=new_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":
+        while self.get_auto_scaling_group_instances(auto_scaling_group_id=inactive_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":
             try:
                 logging.info("Attempting to retrieve console output from first instance up -- this will not work for non-nitro hypervisor VMs")
                 logging.info(self.get_instance_console_output(first_new_instance)['Output'])
@@ -100,11 +113,11 @@ class ASG():
             sleep(10)
 
         # Wait for remaining instances (if any) to come up too
-        while len(self.asgs_healthy_instances(new_asg)) < self.scale_to:
+        while len(self.asgs_healthy_instances(inactive_asg)) < self.scale_to:
             logging.info("Waiting for all instances to be healthy ...")
 
-        logging.info("ASG fully healthy. Logging new ASG name to \"new_asg.txt\"")
-        open("new_asg.txt", "w").write(new_asg)
+        logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
+        open("inactive_asg.txt", "w").write(inactive_asg)
 
     def get_first_new_instance(self, new_asg):
         asg_instances = self.get_auto_scaling_group_instances(new_asg)
@@ -286,15 +299,14 @@ class ASG():
         expects ASG ID as argument
         """
 
-        if not self.scale_to:
-            asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
-            asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]
 
-            return {
-                "desired": asg['DesiredCapacity'],
-                "min": asg['MinSize'],
-                "max": asg['MaxSize']
-            }
+        return {
+            "desired": asg['DesiredCapacity'],
+            "min": asg['MinSize'],
+            "max": asg['MaxSize']
+        }
 
     def get_auto_scaling_group_instances(self, auto_scaling_group_id, instance_ids=None):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
