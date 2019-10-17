@@ -64,7 +64,12 @@ class ASG():
             sleep(10)
 
         logging.info("Scaling ASG back up")
-        self.scale(new_asg, self.scale_to['min'], self.scale_to['max'], self.scale_to['capacity'])
+        self.scale(
+            auto_scaling_group_id = new_asg,
+            min_size = self.scale_to['min'],
+            max_size = self.scale_to['max'],
+            desired =  self.scale_to['capacity']
+        )
 
         while len(self.get_auto_scaling_group_instances(new_asg)) < 1:
             logging.info("Waiting for instances in ASG to start ...")
@@ -261,28 +266,35 @@ class ASG():
             "version": launch_template_new_version
         }
 
-    def scale(self, auto_scaling_group_id, min_size, max_size, capacity):
+    def scale(self, auto_scaling_group_id, min_size, max_size, desired):
+        """Scale an ASG to {'min_size', 'max_size', 'desired'}"""
+
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
 
         response = asg_client.update_auto_scaling_group(
             AutoScalingGroupName=auto_scaling_group_id,
             MinSize=min_size,
             MaxSize=max_size,
-            DesiredCapacity=capacity
+            DesiredCapacity=desired
         )
 
         return response
 
     def get_current_scale(self, asg):
         """
-        Gets the current scales of the given ASG; {'desired', 'min', 'max'}
+        Returns the current scales of the given ASG as dict {'desired', 'min', 'max'},
+        expects ASG ID as argument
         """
 
         if not self.scale_to:
             asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
             asg = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]
 
-            return {"desired": asg['DesiredCapacity'], "min": asg['MinSize'], "max": asg['MaxSize']}
+            return {
+                "desired": asg['DesiredCapacity'],
+                "min": asg['MinSize'],
+                "max": asg['MaxSize']
+            }
 
     def get_auto_scaling_group_instances(self, auto_scaling_group_id, instance_ids=None):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
