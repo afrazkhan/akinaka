@@ -87,14 +87,14 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
 
     from .asg import update_asg
 
-    asg = update_asg.ASG(region, role_arn, lb, asg_name, target_group)
-    application = asg.get_application_name()
+    asg = update_asg.ASG(region, role_arn)
+    application = asg.get_application_name(asg=asg_name, loadbalancer=lb, target_group=target_group)
 
     if lb or target_group:
         if not skip_status_check:
             set_deploy_status("start", region, role_arn, application)
 
-    asg.do_update(ami)
+    asg.do_update(ami, asg=asg_name, loadbalancer=lb, target_group=target_group)
     exit(0)
 
 @update.command()
@@ -137,7 +137,7 @@ def scale_down_inactive(ctx, active_asg, skip_status_check):
 
     from .asg import update_asg
 
-    asg = update_asg.ASG(region=region, role_arn=role_arn, asg=active_asg)
+    asg = update_asg.ASG(region=region, role_arn=role_arn)
 
-    asg.scale_down_inactive()
+    asg.scale_down_inactive(active_asg)
     exit(0)

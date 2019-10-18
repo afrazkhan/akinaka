@@ -13,52 +13,51 @@ aws_client = AWS_Client()
 class ASG():
     """All the methods needed to perform a blue/green deploy"""
 
-    def __init__(self, region, role_arn, loadbalancer=None, asg=None, target_group=None):
-        self.loadbalancer = loadbalancer
+    def __init__(self, region, role_arn):
         self.region = region
         self.role_arn = role_arn
-        self.asg = asg
-        self.target_group = target_group
 
-    def get_application_name(self):
+    def get_application_name(self, asg, loadbalancer=None, target_group=None):
         """
         Returns the application name that we're deploying, worked out from the target group
         (via the load balancer if applicable)
         """
 
-        if self.asg:
-            return self.asg
+        if asg:
+            return asg
 
-        target_group_arn = self.get_target_group_arn()
+        target_group_arn = self.get_target_group_arn(loadbalancer, target_group)
         active_asg = self.get_active_asg(target_group_arn)
         asg_split = active_asg.split('-')[0:-1]
 
         return '-'.join(asg_split)
 
-    def asgs_by_liveness(self):
+    def asgs_by_liveness(self, asg=None, loadbalancer=None, target_group=None):
         """Return dict of '{inactive: ASG, active: ASG}'"""
 
-        if self.asg is not None:
+        if asg is not None:
             logging.info("We've been given the ASG name as an argument")
             # NOTE: "inactive_asg" is a misnomer at this point, since when we already have the ASG
             #       name, it is also the active ASG, because this case is used for non-blue/green ASGs
-            return {"inactive_asg": self.asg, "active_asg": self.asg}
+            return {"inactive_asg": asg, "active_asg": asg}
 
-        target_group_arn = self.get_target_group_arn()
+        target_group_arn = self.get_target_group_arn(loadbalancer=loadbalancer, target_group=target_group)
         active_asg = self.get_active_asg(target_group_arn)
         inactive_asg = self.get_inactive_asg(active_asg)
 
         return {"inactive_asg": inactive_asg, "active_asg": active_asg}
 
-    def scale_down_inactive(self):
+    def scale_down_inactive(self, asg):
         # NOTE: We're making the heavy presumption here that the _active_ ASG is the one we've been
         #       given from the command line
-        inactive_asg = self.get_inactive_asg(self.asg)
+        inactive_asg = self.get_inactive_asg(asg)
         self.scale(inactive_asg, 0, 0, 0)
 
-    def do_update(self, ami):
-        inactive_asg = self.asgs_by_liveness()['inactive_asg']
-        active_asg = self.asgs_by_liveness()['active_asg']
+    def do_update(self, ami, asg=None, loadbalancer=None, target_group=None):
+        asg_liveness_info = self.asgs_by_liveness(asg=asg, loadbalancer=loadbalancer, target_group=target_group)
+
+        inactive_asg = asg_liveness_info['inactive_asg']
+        active_asg = asg_liveness_info['active_asg']
         new_ami = ami
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
@@ -77,7 +76,7 @@ class ASG():
             auto_scaling_group_id = inactive_asg,
             min_size = scale_to['min'],
             max_size = scale_to['max'],
-            desired =  scale_to['capacity']
+            desired =  scale_to['desired']
         )
 
         while len(self.get_auto_scaling_group_instances(inactive_asg)) < 1:
@@ -109,7 +108,7 @@ class ASG():
             sleep(10)
 
         # Wait for remaining instances (if any) to come up too
-        while len(self.asgs_healthy_instances(inactive_asg)) < scale_to:
+        while len(self.asgs_healthy_instances(inactive_asg)) < scale_to['desired']:
             logging.info("Waiting for all instances to be healthy ...")
 
         logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
@@ -143,17 +142,21 @@ class ASG():
         except Exception as e:
             raise exceptions.AkinakaCriticalException("{}: Likely couldn't find the ASG you're trying to update".format(e))
 
-    def get_target_group_arn(self):
+    def get_target_group_arn(self, loadbalancer=None, target_group=None):
         """
-        Returns a string containing the ARN of the target group supplied by --targetgroup or worked
-        out by stepping through some logic from the loadbalancer from --lb
+        Returns a string containing the ARN of the target group, either by using:
+
+        * targetgroup from --targetgroup
+        * loadbalancer from --lb
+
+        Both are mutually exclusive, and at least one must be supplied
         """
 
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
-        if self.target_group is not None:
-            return alb_client.describe_target_groups(Names=[self.target_group])['TargetGroups'][0]['TargetGroupArn']
+        if target_group is not None:
+            return alb_client.describe_target_groups(Names=[target_group])['TargetGroups'][0]['TargetGroupArn']
 
-        loadbalancer_raw_info = alb_client.describe_load_balancers(Names=[self.loadbalancer])
+        loadbalancer_raw_info = alb_client.describe_load_balancers(Names=[loadbalancer])
         loadbalancer_arn = loadbalancer_raw_info['LoadBalancers'][0]['LoadBalancerArn']
 
         target_groups_raw_info = alb_client.describe_target_groups(LoadBalancerArn=loadbalancer_arn)['TargetGroups']
