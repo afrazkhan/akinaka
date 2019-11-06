@@ -8,11 +8,11 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="akinaka",
+    version="0.4.0",
     python_requires='>=3.3.0',
-    version="0.3.0",
     author="Afraz",
     author_email="afraz@olindata.com",
-    description="OlinData's aws cli Extras",
+    description="OlinData's AWS CLI Extras",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://gitlab.olindata.com/olindata/akinaka",

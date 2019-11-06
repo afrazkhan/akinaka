@@ -123,7 +123,7 @@ Done with the `update` parent command, and then the `asg` and `targetgroup` subc
 Example:
 
     # For standalone ASGs (not blue/green)
-    akinaka.py update \
+    akinaka update \
       --region eu-west-1 \
       --role-arn arn:aws:iam::123456789100:role/management_assumable \
     asg \
@@ -131,7 +131,7 @@ Example:
       --ami ami-000000
 
     # For blue/green ASGs
-    akinaka.py update \
+    akinaka update \
       --region eu-west-1 \
       --role-arn arn:aws:iam::123456789100:role/management_assumable \
     asg \
@@ -139,7 +139,7 @@ Example:
       --ami ami-000000
 
     # For blue/green ASGs with multiple Target Groups behind the same ALB
-    akinaka.py update \
+    akinaka update \
       --region eu-west-1 \
       --role-arn arn:aws:iam::123456789100:role/management_assumable \
     asg \
@@ -152,7 +152,7 @@ output, so that it can be used in the next job.
 
 Once the new ASG is confirmed to be working as expected:
 
-    akinaka.py update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --new blue
+    akinaka update --region eu-west-1 --role-arn arn:aws:iam::123456789100:role/management_assumable asg --new blue
 
 The value of `--role-arn` is used to assume a role in the target account with enough
 permissions to perform the actions of modifying ASGs and Target Groups. As such,
@@ -177,7 +177,7 @@ keep the latest version of all the AMIs it finds for it.
 
 Usage:
 
-    akinaka.py cleanup \
+    akinaka cleanup \
         --region eu-west-1 \
         --role-arns "arn:aws:iam::198765432100:role/management_assumable arn:aws:iam::123456789100:role/management_assumable" \
         ami \
@@ -201,7 +201,7 @@ will keep all AMIs found within 7 days, if they are not in the `--exceptional-am
 
 Delete all EBS volumes that are not attached to an instance (stopped or not):
 
-    akinaka.py cleanup \
+    akinaka cleanup \
         --region eu-west-1 \
         --role-arns "arn:aws:iam::198765432100:role/management_assumable arn:aws:iam::123456789100:role/management_assumable" \
         ebs
@@ -210,7 +210,7 @@ Delete all EBS volumes that are not attached to an instance (stopped or not):
 
     This will delete all snapshots tagged "akinaka-made":
     
-    akinaka.py cleanup \
+    akinaka cleanup \
         --not-dry-run \
         --region eu-west-1 \
         --role-arns "arn:aws:iam::876521782800:role/OlinDataAssumedAdministrator" \
@@ -225,7 +225,7 @@ Perform often necessary but complex tasks with RDS.
 
 Copy encrypted RDS instances between accounts:
 
-    akinaka.py copy --region eu-west-1 \
+    akinaka copy --region eu-west-1 \
         rds \
             --source-role-arn arn:aws:iam::198765432100:role/management_assumable \
             --target-role-arn arn:aws:iam::123456789100:role/management_assumable \
@@ -241,7 +241,7 @@ Copy encrypted RDS instances between accounts:
 
 Limited functionality for interactive with EKS and ECR. At the moment it's just getting a docker login via an assumed role to another assumed role:
 
-    akinaka.py container --region eu-west-1 --role-arn arn:aws:iam::0123456789:role/registry-rw get-ecr-login --registry 0123456789
+    akinaka container --region eu-west-1 --role-arn arn:aws:iam::0123456789:role/registry-rw get-ecr-login --registry 0123456789
 
 The above will assume the role `arn:aws:iam::0123456789:role/registry-rw` in the account with the registry, and spit out a `docker login` line for you to use — exactly like `aws ecr get-login`, but working for assumed roles.
 
@@ -249,7 +249,7 @@ The above will assume the role `arn:aws:iam::0123456789:role/registry-rw` in the
 
 Get a view of your daily AWS estimated bill for the x number of days. Defaults to today's estimated bill.
 
-    akinaka.py reporting --region us-east-1 \
+    akinaka reporting --region us-east-1 \
       --role-arn arn:aws:iam::1234567890:role/billing_assumerole \
       bill-estimates --from-days-ago 1
 
@@ -268,9 +268,9 @@ You can specify any region to the `--region` flag.
 
 ## Contributing
 
-Modules can be added easily by simply dropping them in and adding an entry into `akinaka.py` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
+Modules can be added easily by simply dropping them in and adding an entry into `akinaka` to include them, and some `click` code in their `__init__` (or elsewhere that's loaded, but this is the cleanest way).
 
-For example, given a module called `akinaka_moo`, and a single command and file called `moo`, add these two lines in the appropriate places of `akinaka.py`:
+For example, given a module called `akinaka_moo`, and a single command and file called `moo`, add these two lines in the appropriate places of `akinaka`:
 
     from akinaka_update.commands import moo as moo_commands
     cli.add_command(moo_commands)
