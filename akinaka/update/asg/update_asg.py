@@ -53,15 +53,42 @@ class ASG():
         inactive_asg = self.get_inactive_asg(asg)
         self.scale(inactive_asg, 0, 0, 0)
 
+    def set_asg_launch_template_version(self, asg, lt_id, lt_version):
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+
+        asg_client.update_auto_scaling_group(
+            AutoScalingGroupName = asg,
+            LaunchTemplate = {
+                "LaunchTemplateId": lt_id,
+                "Version": lt_version
+            }
+        )
+
     def do_update(self, ami, asg=None, loadbalancer=None, target_group=None):
         asg_liveness_info = self.asgs_by_liveness(asg=asg, loadbalancer=loadbalancer, target_group=target_group)
 
         inactive_asg = asg_liveness_info['inactive_asg']
         active_asg = asg_liveness_info['active_asg']
         new_ami = ami
+        current_lt_info = self.get_launch_template_info(self.get_lt_name(inactive_asg))
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
-        self.update_launch_template(inactive_asg, new_ami, self.get_lt_name(inactive_asg))
+
+        # Set the current ASG to the current launch template version. Shouldn't actually be necessary,
+        # since it's done during the previous deploy, but including for completeness and paranoia
+        self.set_asg_launch_template_version(
+            asg=active_asg,
+            lt_id=current_lt_info["id"],
+            lt_version=current_lt_info["version"],
+        )
+
+        # Update the lt and set the soon to be new ASG to the new launch template version
+        updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
+        self.set_asg_launch_template_version(
+            asg=inactive_asg,
+            lt_id=updated_lt["id"],
+            lt_version=updated_lt["version"]
+        )
 
         scale_to = self.get_current_scale(active_asg)
 
@@ -231,7 +258,9 @@ class ASG():
 
         return "-".join(asg_parts)
 
-    def get_launch_template_id(self, lt_name):
+    def get_launch_template_info(self, lt_name):
+        """Returns the [id] and (latest) [version] number for lt_name"""
+
         ec2_client = aws_client.create_client('ec2', self.region, self.role_arn)
 
         response = ec2_client.describe_launch_templates(
@@ -244,23 +273,27 @@ class ASG():
             ]
         )
 
-        # This is hackish because we are assuming that there is going to be only 1 (one) launch template
+        # FIXME: This is hackish because we are assuming that there is going to be only 1 (one) launch template
         return {
             "id": response['LaunchTemplates'][0]['LaunchTemplateId'],
-            "version": response['LaunchTemplates'][0]['LatestVersionNumber']
+            "version": str(response['LaunchTemplates'][0]['LatestVersionNumber'])
         }
 
-    def update_launch_template(self, inactive_asg, ami, lt_name):
-        lt = self.get_launch_template_id(lt_name)
-        lt_client  = aws_client.create_client('ec2', self.region, self.role_arn)
+    def update_launch_template(self, ami, lt_name):
+        """
+        Creates a new template version for [lt_name] which uses [ami], and sets the default
+        default template version to be that version.
 
-        lt_id = lt['id']
-        lt_source_version = str(lt['version'])
+        Returns [id] and (new) [version] number
+        """
+
+        lt = self.get_launch_template_info(lt_name)
+        lt_client  = aws_client.create_client('ec2', self.region, self.role_arn)
 
         response = lt_client.create_launch_template_version(
             DryRun = False,
-            LaunchTemplateId = lt_id,
-            SourceVersion = lt_source_version,
+            LaunchTemplateId = lt['id'],
+            SourceVersion = str(lt['version']),
             LaunchTemplateData = {
                 "ImageId": ami
             }
@@ -269,12 +302,12 @@ class ASG():
         launch_template_new_version = str(response['LaunchTemplateVersion']['VersionNumber'])
 
         lt_client.modify_launch_template(
-            LaunchTemplateId=lt_id,
+            LaunchTemplateId=lt['id'],
             DefaultVersion=launch_template_new_version
         )
 
         return {
-            "id": lt_id,
+            "id": lt['id'],
             "version": launch_template_new_version
         }
 
