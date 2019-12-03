@@ -6,6 +6,11 @@ from time import gmtime, strftime
 class AWS_Client():
 
     def create_client(self, service, region, role_arn, valid_for=None):
+        """
+        Takes service, region, role_arn, and optionally valid_for (duration in seconds),
+        and returns a boto3 client for that service, using that role_arn (with assume role)
+        """
+
         client_options = {
             'region_name': region
         }
