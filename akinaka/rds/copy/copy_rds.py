@@ -106,7 +106,7 @@ class CopyRDS():
                                     "Resource": "*"
                                 },
                                 {
-                                    "Sid": "Allow use of the key by the %s",
+                                    "Sid": "Allow use of the key by %s",
                                     "Effect": "Allow",
                                     "Principal": {
                                         "AWS": "%s"

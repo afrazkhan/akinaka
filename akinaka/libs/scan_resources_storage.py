@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 Scans services that may contain data, and returns a list with information on any storage found:
 
@@ -21,7 +24,6 @@ FIXME: EFS is currently out of scope, due to it not being treated as a native AW
     }
 ]
 """
-
 
 import boto3
 from akinaka.client.aws_client import AWS_Client
