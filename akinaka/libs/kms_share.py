@@ -39,7 +39,7 @@ class KMSShare():
         live_kms_client = aws_client.create_client('kms', self.region, self.assumable_role_arn)
 
         key_alias = 'alias/RDSBackupRestoreSharedKeyWith{}'.format(self.share_to_account)
-        logging.info("Searching for Customer Managed KMS Key with alias {} that is already shared with account {}...".format(key_alias, self.share_to_account))
+        logging.info("Searching for Customer Managed KMS Key with alias {} that is already shared with account {}".format(key_alias, self.share_to_account))
 
         try:
             key = live_kms_client.describe_key(KeyId=key_alias)

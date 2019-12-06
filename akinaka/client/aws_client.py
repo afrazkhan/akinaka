@@ -19,7 +19,7 @@ class AWS_Client():
 
         credentials = sts_client.assume_role(
             RoleArn=role_arn,
-            RoleSessionName="gitlab-{}".format(strftime("%Y%m%d%H%M%S", gmtime())),
+            RoleSessionName="akinaka-{}".format(strftime("%Y%m%d%H%M%S", gmtime())),
             DurationSeconds=valid_for or 900
         )
 

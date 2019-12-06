@@ -6,28 +6,24 @@ import logging
 import pprint
 import boto3
 
+helpers.set_logger()
+
 @click.group()
 @click.option("--region", required=True, help="Region your resources are located in")
-@click.option("--role-arn", required=True, help="ARN of a role the account to back up _to_, which can be assumed with STS")
-@click.option("--live-account", required=True, help="Account ID of the account with data to backup")
-@click.option("--backup-account", required=False, help="Account ID of the account to make the backups to")
+@click.option("--source-role-arn", required=True, help="ARN of a role the account to back up _from_")
+@click.option("--destination-role-arn", required=True, help="ARN of an assumable role in the account to back up _to_")
 @click.option("--dry-run", is_flag=True, help="Don't back anything up, just list would be backed up")
 @click.pass_context
-def backup(ctx, region, role_arn, live_account, backup_account, dry_run):
+def backup(ctx, region, source_role_arn, destination_role_arn, dry_run):
     """
     Backup subcommand. Does nothing by itself except pass the global options through to it's
     subcommands via ctx
     """
 
-    if backup_account == None:
-        sts_client = boto3.client('sts')
-        backup_account = sts_client.get_caller_identity()['Account']
-
     ctx.obj = {
         'region': region,
-        'role_arn': role_arn,
-        'live_account': live_account,
-        'backup_account': backup_account,
+        'source_role_arn': source_role_arn,
+        'destination_role_arn': destination_role_arn,
         'dry_run': dry_run,
         'log_level': ctx.obj.get('log_level')
     }
@@ -36,86 +32,37 @@ def backup(ctx, region, role_arn, live_account, backup_account, dry_run):
 
 @backup.command()
 @click.pass_context
-def backup_all(ctx):
-    """ Backup all data in any found instances of RDS, Aurora, and S3  """
+@click.option("--take-snapshot", is_flag=True, help="TODO: Boolean, default false. Take a live snapshot now, or take the existing latest snapshot")
+@click.option("--db-arns", required=False, help="Comma separated list of either DB names or ARNs to transfer")
+def rds(ctx, take_snapshot, db_arns):
+    """
+    Backup all RDS instances found if --db-arns is omitted, else look for the latest
+    snapshots for those DB names given and transfer them to the destination account
+    """
 
     region = ctx.obj.get('region')
-    role_arn = ctx.obj.get('role_arn')
-    live_account = ctx.obj.get('live_account')
+    source_role_arn = ctx.obj.get('source_role_arn')
+    destination_role_arn = ctx.obj.get('destination_role_arn')
     dry_run = ctx.obj.get('dry_run')
 
-    scanner = scan_resources_storage.ScanResources(region, role_arn)
-    scanner.scan_all()
+    if db_arns:
+        db_arns = [db_arns.replace(' ','')]
+    else:
+        scanner = scan_resources_storage.ScanResources(region, source_role_arn)
+        db_arns = db_arns or scanner.scan_rds()['rds_arns']
+
+    logging.info("Will attempt to backup the following RDS instances, unless this is a dry run:")
+    logging.info(db_arns)
 
     if dry_run:
         exit(0)
 
-    # from .backup_all import backup_backup_all
-    # backup_all = backup_backup_all.backup_all(region=region, role_arn=role_arn)
-
-@backup.command()
-@click.pass_context
-def aurora(ctx):
-    """ Backup all aurora clusters found """
-
-    region = ctx.obj.get('region')
-    role_arn = ctx.obj.get('role_arn')
-    live_account = ctx.obj.get('live_account')
-    dry_run = ctx.obj.get('dry_run')
-
-    scanner = scan_resources_storage.ScanResources(region, role_arn)
-    scanner.scan_aurora()
-
-    if dry_run:
-        exit(0)
-
-    # from .aurora import backup_aurora
-    # aurora = backup_aurora.aurora(region=region, role_arn=role_arn)
-
-@backup.command()
-@click.pass_context
-def rds(ctx):
-    """ Backup all RDS instances found """
-
-    region = ctx.obj.get('region')
-    role_arn = ctx.obj.get('role_arn')
-    live_account = ctx.obj.get('live_account')
-    dry_run = ctx.obj.get('dry_run')
-    backup_account = ctx.obj.get('backup_account')
-
-    scanner = scan_resources_storage.ScanResources(region, role_arn)
-    rds_arns = scanner.scan_rds()
-
-    print("Will attempt to backup the following RDS instances, unless this is a dry run:")
-    pprint.pprint(rds_arns)
-
-    if dry_run:
-        exit(0)
-
-    from .rds import backup_rds
-    rds = backup_rds.BackupRDS(
+    from .rds import transfer_snapshot
+    rds = transfer_snapshot.TransferSnapshot(
         region=region,
-        assumable_role_arn=role_arn,
-        live_account=live_account,
-        backup_account=backup_account
+        source_role_arn=source_role_arn,
+        destination_role_arn=destination_role_arn
     )
-    rds.backup(rds_arns=rds_arns)
 
-@backup.command()
-@click.pass_context
-def s3(ctx):
-    """ Backup all s3 buckets found """
-
-    region = ctx.obj.get('region')
-    role_arn = ctx.obj.get('role_arn')
-    live_account = ctx.obj.get('live_account')
-    dry_run = ctx.obj.get('dry_run')
-
-    scanner = scan_resources_storage.ScanResources(region, role_arn)
-    scanner.scan_s3()
-
-    if dry_run:
-        exit(0)
-
-    # from .s3 import backup_s3
-    # s3 = backup_s3.s3(region=region, role_arn=role_arn)
+    shared_kms_key = rds.get_shared_kms_key()
+    rds.transfer_snapshot(take_snapshot=take_snapshot, db_arns=db_arns, source_kms_key=shared_kms_key)
