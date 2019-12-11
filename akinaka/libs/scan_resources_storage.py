@@ -38,30 +38,30 @@ class ScanResources():
     def scan_all(self):
         """ Scan all resource types in scope, and return separate lists for each """
 
-        rds_arns = self.scan_rds()
-        aurora_arns = self.scan_aurora()
+        rds_instance_names = self.scan_rds_instances()
+        rds_aurora_names = self.scan_rds_aurora()
         s3_arns = self.scan_s3()
-        all_arns = { **rds_arns, **aurora_arns, **s3_arns }
+        all_arns = { **rds_instance_names, **rds_aurora_names, **s3_arns }
 
         return all_arns
 
-    def scan_rds(self):
-        """ Return list of ARNs for all RDS objects """
+    def scan_rds_instances(self):
+        """ Return list of ARNs for all RDS DB instances """
 
         rds_client = aws_client.create_client('rds', self.region, self.role_arn)
         response = rds_client.describe_db_instances()['DBInstances']
-        arns = [db['DBInstanceArn'] for db in response]
+        names = [db['DBInstanceIdentifier'] for db in response if 'DBClusterIdentifier' not in db.keys()]
 
-        return { 'rds_arns': arns }
+        return { 'db_names': names }
 
-    def scan_aurora(self):
+    def scan_rds_aurora(self):
         """ Return list of ARNs for all RDS Aurora objects """
 
         rds_client = aws_client.create_client('rds', self.region, self.role_arn)
         response = rds_client.describe_db_clusters()['DBClusters']
-        arns = [db['DBClusterArn'] for db in response]
+        names = [db['DBClusterIdentifier'] for db in response]
 
-        return { 'aurora_arns': arns }
+        return { 'aurora_names': names }
 
     def scan_s3(self):
         """ Return list of ARNs for all S3 buckets """

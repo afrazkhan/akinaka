@@ -73,9 +73,9 @@ def create_kms_key(region, assumable_role_arn):
 @dr.command()
 @click.pass_context
 @click.option("--take-snapshot", is_flag=True, help="TODO: Boolean, default false. Take a live snapshot now, or take the existing latest snapshot")
-@click.option("--db-arns", required=False, help="Comma separated list of either DB names or ARNs to transfer")
-@click.option("--service", required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
-def transfer(ctx, take_snapshot, db_arns, service):
+@click.option("--db-names", required=False, help="Comma separated list of DB names to transfer")
+@click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
+def transfer(ctx, take_snapshot, db_names, service):
     """
     Backup [service] from owning account of [ctx.source_role_arn] to owning account
     of [ctx.destination_role_arn].
@@ -95,18 +95,45 @@ def transfer(ctx, take_snapshot, db_arns, service):
     destination_kms_key = create_kms_key(region, destination_role_arn)
 
     if service == 'rds':
+        if db_names:
+            db_names = [db_names.replace(' ','')]
+        else:
+            scanner = scan_resources_storage.ScanResources(region, source_role_arn)
+            db_names = db_names or scanner.scan_rds_instances()['db_names']
+
         rds(
             dry_run,
             region,
             source_role_arn,
             destination_role_arn,
             take_snapshot,
-            db_arns,
+            db_names,
             source_kms_key,
             destination_kms_key,
             source_account,
             destination_account)
 
+    if service == 'aurora':
+        if db_names:
+            db_names = [db_names.replace(' ','')]
+        else:
+            scanner = scan_resources_storage.ScanResources(region, source_role_arn)
+            db_names = db_names or scanner.scan_rds_aurora()['aurora_names']
+
+        rds(
+            dry_run,
+            region,
+            source_role_arn,
+            destination_role_arn,
+            take_snapshot,
+            db_names,
+            source_kms_key,
+            destination_kms_key,
+            source_account,
+            destination_account)
+
+    if service == 's3':
+        logging.info('TODO')
 
 def rds(
     dry_run,
@@ -114,7 +141,7 @@ def rds(
     source_role_arn,
     destination_role_arn,
     take_snapshot,
-    db_arns,
+    db_names,
     source_kms_key,
     destination_kms_key,
     source_account,
@@ -123,14 +150,8 @@ def rds(
     Call the RDS class to transfer snapshots
     """
 
-    if db_arns:
-        db_arns = [db_arns.replace(' ','')]
-    else:
-        scanner = scan_resources_storage.ScanResources(region, source_role_arn)
-        db_arns = db_arns or scanner.scan_rds()['rds_arns']
-
     logging.info("Will attempt to backup the following RDS instances, unless this is a dry run:")
-    logging.info(db_arns)
+    logging.info(db_names)
 
     if dry_run:
         exit(0)
@@ -146,7 +167,7 @@ def rds(
 
     rds.transfer_snapshot(
         take_snapshot=take_snapshot,
-        db_arns=db_arns,
+        db_names=db_names,
         source_account=source_account,
         destination_account=destination_account
     )
