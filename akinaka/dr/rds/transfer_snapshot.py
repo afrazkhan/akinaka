@@ -17,7 +17,7 @@ method; transfer_snapshot()
 from datetime import datetime
 from operator import itemgetter
 from akinaka.client.aws_client import AWS_Client
-from akinaka.libs import helpers, kms_share
+from akinaka.libs import helpers
 import logging
 import time
 
@@ -29,80 +29,40 @@ class TransferSnapshot():
         self,
         region,
         source_role_arn,
-        destination_role_arn
+        destination_role_arn,
+        source_kms_key,
+        destination_kms_key
         ):
 
         self.region = region
         self.source_role_arn = source_role_arn
         self.destination_role_arn = destination_role_arn
+        self.source_kms_key = source_kms_key
+        self.destination_kms_key = destination_kms_key
 
-        source_sts_client = aws_client.create_client('sts', self.region, self.source_role_arn)
-        self.source_account = source_sts_client.get_caller_identity()['Account']
-
-        destination_sts_client = aws_client.create_client('sts', self.region, self.destination_role_arn)
-        self.destination_account = destination_sts_client.get_caller_identity()['Account']
-
-
-    def get_shared_kms_key(self):
-        """
-        Create and return shared KMS account between [self.source_account] and [self.destination_account]
-        """
-
-        kms_sharer = kms_share.KMSShare(
-            region = self.region,
-            assumable_role_arn = self.source_role_arn,
-            share_from_account = self.source_account,
-            share_to_account = self.destination_account
-        )
-
-        return kms_sharer.get_kms_key(self.source_account)
-
-    def create_local_kms_key(self):
-        """
-        Search for a key name that should exists if this has been run before. If not found,
-        create it. In both cases, return the key.
-        """
-
-        destination_kms_client = aws_client.create_client('kms', self.region, self.destination_role_arn)
-        key_alias = "alias/{}".format(self.source_account)
-
-        try:
-            kms_key = destination_kms_client.describe_key(KeyId=key_alias)
-            logging.info("Found key: {}".format(kms_key['KeyMetadata']['Arn']))
-        except destination_kms_client.exceptions.NotFoundException:
-            kms_key = destination_kms_client.create_key()
-            logging.info("No existing key found, so we created one: {}".format(kms_key['KeyMetadata']['Arn']))
-
-            destination_kms_client.create_alias(
-                AliasName=key_alias,
-                TargetKeyId=kms_key['KeyMetadata']['Arn']
-            )
-
-        return kms_key
-
-    def transfer_snapshot(self, take_snapshot, db_arns, source_kms_key):
+    def transfer_snapshot(self, take_snapshot, db_arns, source_account, destination_account):
         """
         For every DB in [db_arns], call methods to:
 
         1. Either take a new snapshot (TODO), or use the latest automatically created one
-        2. Recrypt the snapshot with [source_kms_key]. This key must be shared between accounts
+        2. Recrypt the snapshot with [self.source_kms_key]. This key must be shared between accounts
         3. Share it with self.destination_account
         4. Copy it to self.destination_account with the [destination_kms_key]
         """
 
         for arn in db_arns:
             if take_snapshot:
-                source_snapshot = self.take_snapshot(arn, source_kms_key)
+                source_snapshot = self.take_snapshot(arn, self.source_kms_key)
             else:
                 source_snapshot = self.get_latest_snapshot(arn)
 
             source_rds_client = aws_client.create_client('rds', self.region, self.source_role_arn)
-            recrypted_snapshot = self.recrypt_snapshot(source_rds_client, source_snapshot, source_kms_key)
+            recrypted_snapshot = self.recrypt_snapshot(source_rds_client, source_snapshot, self.source_kms_key, source_account)
 
-            self.share_snapshot(recrypted_snapshot, self.destination_account)
+            self.share_snapshot(recrypted_snapshot, destination_account)
 
             destination_rds_client = aws_client.create_client('rds', self.region, self.destination_role_arn)
-            self.recrypt_snapshot(destination_rds_client, recrypted_snapshot, self.create_local_kms_key())
+            self.recrypt_snapshot(destination_rds_client, recrypted_snapshot, self.destination_kms_key, destination_account)
 
     def get_latest_snapshot(self, db_arn):
         """
@@ -124,17 +84,17 @@ class TransferSnapshot():
 
         return latest
 
-    def make_snapshot_name(self, db_name):
+    def make_snapshot_name(self, db_name, account):
         date = datetime.utcnow().strftime('%Y%m%d-%H%M')
 
-        return "{}-{}-{}".format(db_name, date, self.destination_account)
+        return "{}-{}-{}".format(db_name, date, account)
 
-    def recrypt_snapshot(self, rds_client, snapshot, kms_key, tags=None):
+    def recrypt_snapshot(self, rds_client, snapshot, kms_key, destination_account, tags=None):
         """
         Recrypt a snapshot [snapshot] with the KMS key [kms_key]. Return the recrypted snapshot.
         """
 
-        new_snapshot_id = self.make_snapshot_name(snapshot['DBInstanceIdentifier'])
+        new_snapshot_id = self.make_snapshot_name(snapshot['DBInstanceIdentifier'], destination_account)
 
         try:
             recrypted_snapshot = rds_client.copy_db_snapshot(
@@ -185,7 +145,7 @@ class TransferSnapshot():
                 logging.info("Snapshot {} complete and available!".format(snapshot['DBSnapshotIdentifier']))
                 break
             else:
-                logging.info("Snapshot {} in progress, {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
+                logging.info("Snapshot {} is in progress; {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
                 time.sleep(10)
 
     def take_snapshot(self, db_name, source_kms_key):

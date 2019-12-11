@@ -38,7 +38,7 @@ class KMSShare():
 
         live_kms_client = aws_client.create_client('kms', self.region, self.assumable_role_arn)
 
-        key_alias = 'alias/RDSBackupRestoreSharedKeyWith{}'.format(self.share_to_account)
+        key_alias = 'alias/SharedKeyWithAccount{}'.format(self.share_to_account)
         logging.info("Searching for Customer Managed KMS Key with alias {} that is already shared with account {}".format(key_alias, self.share_to_account))
 
         try:
@@ -47,7 +47,7 @@ class KMSShare():
 
             return key
         except live_kms_client.exceptions.NotFoundException:
-            logging.info("No valid key found.")
+            logging.info("No valid key found")
             key = self.create_shared_key(share_from_account, key_alias)
 
             return key
@@ -58,7 +58,7 @@ class KMSShare():
         to share_to_account (the account you're calling this from)
         """
 
-        logging.info("Creating Customer Managed KMS Key that is shared...")
+        logging.info("Creating a shared KMS key")
 
         live_kms_client = aws_client.create_client('kms', self.region, self.assumable_role_arn)
 
@@ -88,7 +88,7 @@ class KMSShare():
                         }""" % (self.share_from_account, self.share_to_account, self.share_to_account_arn)
 
         kms_key = live_kms_client.create_key(
-            Description="Shared encryption key with AWS account {}".format(self.assumable_role_arn),
+            Description="Shared encryption key with AWS account {}".format(self.share_to_account),
             Policy=key_policy)
 
         live_kms_client.create_alias(
@@ -96,6 +96,6 @@ class KMSShare():
             TargetKeyId=kms_key['KeyMetadata']['Arn']
         )
 
-        logging.info("Created KMS Key {}, shared with account {}".format(kms_key['KeyMetadata']['Arn'], self.assumable_role_arn))
+        logging.info("Created KMS Key {}, shared with account {}".format(kms_key['KeyMetadata']['Arn'], self.share_to_account))
 
         return kms_key
