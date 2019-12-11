@@ -32,7 +32,6 @@ def dr(ctx, region, source_role_arn, destination_role_arn, dry_run):
 
     pass
 
-
 def get_shared_kms_key(region, source_role_arn, source_account, destination_account):
     """
     Create and return shared KMS account between [source_account] and [destination_account]

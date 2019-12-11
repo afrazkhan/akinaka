@@ -51,12 +51,13 @@ class TransferSnapshot():
         """
 
         for arn in db_arns:
+            source_rds_client = aws_client.create_client('rds', self.region, self.source_role_arn)
+
             if take_snapshot:
-                source_snapshot = self.take_snapshot(arn, self.source_kms_key)
+                source_snapshot = self.take_snapshot(source_rds_client, arn, self.source_kms_key)
             else:
                 source_snapshot = self.get_latest_snapshot(arn)
 
-            source_rds_client = aws_client.create_client('rds', self.region, self.source_role_arn)
             recrypted_snapshot = self.recrypt_snapshot(source_rds_client, source_snapshot, self.source_kms_key, source_account)
 
             self.share_snapshot(recrypted_snapshot, destination_account)
@@ -85,6 +86,8 @@ class TransferSnapshot():
         return latest
 
     def make_snapshot_name(self, db_name, account):
+        """ Make a name based on [db_name] and [account] """
+
         date = datetime.utcnow().strftime('%Y%m%d-%H%M')
 
         return "{}-{}-{}".format(db_name, date, account)
@@ -148,10 +151,22 @@ class TransferSnapshot():
                 logging.info("Snapshot {} is in progress; {}% complete".format(snapshot['DBSnapshotIdentifier'], snapshotcheck['PercentProgress']))
                 time.sleep(10)
 
-    def take_snapshot(self, db_name, source_kms_key):
+    def take_snapshot(self, rds_client, db_name, kms_key):
         """
-        TODO: Take a new snapshot of [db_name] using [source_kms_key]. If we're here, we don't need to
+        TODO: Take a new snapshot of [db_name] using [kms_key]. If we're here, we don't need to
               recrypt, since we already have a shared key to begin with. Some of the logic in
               transfer_snapshot() will need to be changed to accommodate this once ready
+
+              Untested.
         """
-        return "TODO"
+
+        snapshot_name = self.make_snapshot_name(db_name, kms_key['KeyMetadata']['AWSAccountId'])
+
+        snapshot = rds_client.create_db_snapshot(
+            DBInstanceIdentifier=db_name,
+            DBSnapshotIdentifier=snapshot_name,
+            Tags=[ { 'Key': 'akinaka-made', 'Value': 'true' }, ]
+        )
+        logging.info("Snapshot created.")
+
+        return snapshot['DBSnapshot']
