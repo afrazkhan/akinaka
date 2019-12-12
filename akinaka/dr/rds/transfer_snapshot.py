@@ -1,5 +1,4 @@
 """
-
 Sharing snapshots between AWS accounts involves:
 
 1. Creating a key to share between those two accounts, and sharing it
@@ -9,7 +8,6 @@ Sharing snapshots between AWS accounts involves:
 
 This module has all the methods needed to do that, and uses them in the entrypoint
 method; transfer_snapshot()
-
 """
 
 #!/usr/bin/env python3
@@ -40,14 +38,10 @@ class TransferSnapshot():
         self.source_kms_key = source_kms_key
         self.destination_kms_key = destination_kms_key
 
-    def transfer_snapshot(self, take_snapshot, db_names, source_account, destination_account):
+    def transfer_snapshot(self, take_snapshot, db_names, source_account, destination_account, retention):
         """
-        For every DB in [db_names], call methods to:
-
-        1. Either take a new snapshot (TODO), or use the latest automatically created one
-        2. Recrypt the snapshot with [self.source_kms_key]. This key must be shared between accounts
-        3. Share it with self.destination_account
-        4. Copy it to self.destination_account with the [destination_kms_key]
+        For every DB in [db_names], call methods to perform the actions listed in this module's
+        docstring. Additionally, rotate the oldest snapshot out, if there are more than [retention]
         """
 
         for db_name in db_names:
@@ -67,6 +61,29 @@ class TransferSnapshot():
             destination_rds_client = aws_client.create_client('rds', self.region, self.destination_role_arn, valid_for=14400)
             self.recrypt_snapshot(destination_rds_client, recrypted_snapshot, self.destination_kms_key, destination_account)
 
+            self.rotate_snapshots(retention, db_name)
+
+    def rotate_snapshots(self, retention, db_name):
+        """
+        Get all the snapshots for [db_name], and delete the oldest one if there are more than
+        [retention] of them.
+
+        Beware, this does not take distinct days into account, only the number of snapshots. So if you
+        take more than [retention] snapshots in one day, all previous snapshots will be deleted
+        """
+
+        destination_rds_client = aws_client.create_client('rds', self.region, self.destination_role_arn, valid_for=14400)
+
+        snapshots = destination_rds_client.describe_db_snapshots(DBInstanceIdentifier=db_name)['DBSnapshots']
+        if len(snapshots) > retention:
+            oldest_snapshot = sorted(snapshots, key=itemgetter('SnapshotCreateTime'))[-1]
+            logging.info("There are more than the given retention number of snapshots in the account," \
+                "so we're going to delete the oldes: {}".format(oldest_snapshot['DBSnapshotIdentifier'])
+            )
+            destination_rds_client.delete_db_snapshot(
+                DBSnapshotIdentifier=oldest_snapshot['DBSnapshotIdentifier']
+            )
+
     def get_latest_snapshot(self, db_name):
         """
         Return the latest snapshot for [db_name], where the ARN can also be the name of the DB
@@ -80,8 +97,6 @@ class TransferSnapshot():
         #       https://stackoverflow.com/questions/59285540/rewrite-python-method-depending-on-condition
         try:
             snapshots = source_rds_client.describe_db_snapshots(DBInstanceIdentifier=db_name)['DBSnapshots']
-            if len(snapshots) == 0:
-                raise exceptions.AkinakaCriticalException("No snapshots found for {}. You'll need to take one first with --take-snapshot".format(db_name))
             latest = sorted(snapshots, key=itemgetter('SnapshotCreateTime'))[0]
             logging.info("Using snapshot {}".format(latest['DBSnapshotIdentifier']))
         except IndexError:

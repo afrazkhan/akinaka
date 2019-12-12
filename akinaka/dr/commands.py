@@ -75,7 +75,9 @@ def create_kms_key(region, assumable_role_arn):
 @click.option("--take-snapshot", is_flag=True, help="TODO: Boolean, default false. Take a live snapshot now, or take the existing latest snapshot")
 @click.option("--db-names", required=False, help="Comma separated list of DB names to transfer")
 @click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
-def transfer(ctx, take_snapshot, db_names, service):
+@click.option("--retention", required=False, help="Number of days of backups to keep")
+@click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kep, don't do any actual backups")
+def transfer(ctx, take_snapshot, db_names, service, retention, rotate):
     """
     Backup [service] from owning account of [ctx.source_role_arn] to owning account
     of [ctx.destination_role_arn].
@@ -111,7 +113,9 @@ def transfer(ctx, take_snapshot, db_names, service):
             source_kms_key,
             destination_kms_key,
             source_account,
-            destination_account)
+            destination_account,
+            retention,
+            rotate)
 
     if service == 'aurora':
         if db_names:
@@ -130,7 +134,9 @@ def transfer(ctx, take_snapshot, db_names, service):
             source_kms_key,
             destination_kms_key,
             source_account,
-            destination_account)
+            destination_account,
+            retention,
+            rotate)
 
     if service == 's3':
         logging.info('TODO')
@@ -145,7 +151,9 @@ def rds(
     source_kms_key,
     destination_kms_key,
     source_account,
-    destination_account):
+    destination_account,
+    retention,
+    rotate):
     """
     Call the RDS class to transfer snapshots
     """
@@ -165,9 +173,17 @@ def rds(
         destination_kms_key=destination_kms_key
     )
 
+    retention = retention or 7
+
+    if rotate:
+        for db_name in db_names:
+            rds.rotate_snapshots(retention, db_name)
+        exit()
+
     rds.transfer_snapshot(
         take_snapshot=take_snapshot,
         db_names=db_names,
         source_account=source_account,
-        destination_account=destination_account
+        destination_account=destination_account,
+        retention=retention
     )
