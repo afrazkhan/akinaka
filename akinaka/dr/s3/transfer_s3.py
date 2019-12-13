@@ -38,30 +38,40 @@ class TransferS3():
 
     def main(self, old_bucket_names):
         """
-        1. Create bucket named s3_arn-backup with versioning
-        2. Set lifecycle configuration for objects in the bucket
-        3. Sync objects from the source buckets to the new bucket
+        Go through all the actions in this module's docstring
         """
 
         for old_bucket_name in old_bucket_names:
-            new_bucket_name = "{}-backup".format(old_bucket_name)
+            destination_account = self.account_id_from_role_arn(self.destination_role_arn)
+            source_account = self.account_id_from_role_arn(self.source_role_arn)
+            new_bucket_name = "{}-{}".format(old_bucket_name, destination_account)
+
             logging.info("Will create a backup bucket in the backup account if necessary")
-            new_bucket_name = self.create_backup_bucket(new_bucket_name, self.destination_role_arn)
+
+            new_bucket_name = self.create_bucket(new_bucket_name, self.destination_role_arn)
             self.set_bucket_lifecycle(new_bucket_name, self.retention)
             self.set_bucket_policy(
                 bucket=old_bucket_name,
                 granter_role_arn=self.source_role_arn,
-                grantee_role_arn=self.destination_role_arn
+                grantee_account=destination_account
             )
             self.set_bucket_policy(
                 bucket=new_bucket_name,
                 granter_role_arn=self.destination_role_arn,
-                grantee_role_arn=self.destination_role_arn
+                grantee_account=source_account
             )
             self.set_bucket_encryption(new_bucket_name, self.destination_kms_key)
             self.sync_bucket(old_bucket_name, new_bucket_name, self.destination_kms_key)
 
-    def create_backup_bucket(self, new_bucket_name, role_arn):
+    def account_id_from_role_arn(self, role_arn):
+        """
+        Return the account ID that [role_arn] is attached to
+        """
+
+        sts_client = aws_client.create_client('sts', self.region, role_arn)
+        return sts_client.get_caller_identity()['Account']
+
+    def create_bucket(self, new_bucket_name, role_arn):
         """
         Create a bucket named [name]-backup to stored the backup objects in. Returns
         the name of the new bucket
@@ -79,6 +89,14 @@ class TransferS3():
             )
 
             logging.info("Created the versioned bucket {}".format(new_bucket_name))
+        except destination_s3_client.exceptions.BucketAlreadyExists:
+            new_bucket_name = new_bucket_name + "-x"
+
+            logging.info("Bucket name was taken (probably because you're trying to restore " \
+                "the same account multiple times?), so the new bucket name " \
+                "is going to become: {}".format(new_bucket_name))
+
+            self.create_bucket(new_bucket_name, role_arn)
         except destination_s3_client.exceptions.BucketAlreadyOwnedByYou:
             logging.info("No need to create {}, as it already exists and we own it".format(new_bucket_name))
 
@@ -118,7 +136,7 @@ class TransferS3():
         logging.info("Set a lifecycle policy to keep only {} " \
             "versions of objects, for the destination bucket".format(retention))
 
-    def set_bucket_policy(self, bucket, granter_role_arn, grantee_role_arn):
+    def set_bucket_policy(self, bucket, granter_role_arn, grantee_account):
         """
         Set a policy on [bucket] such that the account of [granter_role_arn] can perform
         get, list, and put operations.
@@ -127,9 +145,6 @@ class TransferS3():
         that is the only account which already has access to make this kind of change on
         a bucket policy
         """
-
-        sts_client = aws_client.create_client('sts', self.region, grantee_role_arn)
-        account = sts_client.get_caller_identity()['Account']
 
         source_s3_client = aws_client.create_client('s3', self.region, granter_role_arn)
 
@@ -152,11 +167,11 @@ class TransferS3():
                         }
                     }
                 ]
-            }""" % (bucket, account)
+            }""" % (bucket, grantee_account)
         )
 
         logging.info('Successfully set a bucket policy so that account {} '\
-            'can perform operations on bucket {}'.format(account, bucket))
+            'can perform operations on bucket {}'.format(grantee_account, bucket))
 
     def set_bucket_encryption(self, bucket, kms_key):
         """
