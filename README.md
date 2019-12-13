@@ -254,7 +254,9 @@ Transfer data from S3, RDS, and RDS Aurora into a backup account:
       transfer \
         --service s3
 
-Omitting "--service" will include all supported services.
+Omitting `--service` will include all supported services.
+
+You can optionally specify the name of the instance to transfer with `--names` in a comma separated list, e.g. `--names 'database-1, database-2`. This can be for either RDS instances, or S3 buckets, but not both at the same time. Future versions may remove `--service` and replace it with a subcommand instead, i.e. `akinaka dr transfer rds`, so that those service can have `--names` to themselves.
 
 This requires that Akinaka is run from either an account or instance profile which can use sts:assume to assume both the `source-role-arn` and `destination-role-arn`. This is true even if you are running on the account that `destination-role-arn` is on.
 

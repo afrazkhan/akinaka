@@ -32,7 +32,7 @@ class AWS_Client():
     def create_resource(self, service, region, role_arn, valid_for=None):
         """
         Takes service, region, role_arn, and optionally valid_for (duration in seconds),
-        and returns a boto3 client for that service, using that role_arn (with assume role)
+        and returns a boto3 service object for that service, using that role_arn (with assume role)
         """
 
         client_options = {

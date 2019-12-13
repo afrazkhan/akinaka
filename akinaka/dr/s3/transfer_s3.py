@@ -42,6 +42,8 @@ class TransferS3():
         """
 
         for old_bucket_name in old_bucket_names:
+            self.set_bucket_encryption(old_bucket_name, self.source_kms_key, self.source_role_arn)
+            self.sync_bucket(old_bucket_name, old_bucket_name, self.source_kms_key, self.source_role_arn, self.source_role_arn)
             destination_account = self.account_id_from_role_arn(self.destination_role_arn)
             source_account = self.account_id_from_role_arn(self.source_role_arn)
             new_bucket_name = "{}-{}".format(old_bucket_name, destination_account)
@@ -60,8 +62,8 @@ class TransferS3():
                 granter_role_arn=self.destination_role_arn,
                 grantee_account=source_account
             )
-            self.set_bucket_encryption(new_bucket_name, self.destination_kms_key)
-            self.sync_bucket(old_bucket_name, new_bucket_name, self.destination_kms_key)
+            self.set_bucket_encryption(new_bucket_name, self.destination_kms_key, self.destination_role_arn)
+            self.sync_bucket(old_bucket_name, new_bucket_name, self.destination_kms_key, self.source_role_arn, self.destination_role_arn)
 
     def account_id_from_role_arn(self, role_arn):
         """
@@ -173,14 +175,15 @@ class TransferS3():
         logging.info('Successfully set a bucket policy so that account {} '\
             'can perform operations on bucket {}'.format(grantee_account, bucket))
 
-    def set_bucket_encryption(self, bucket, kms_key):
+    def set_bucket_encryption(self, bucket, kms_key, role_arn):
         """
-        Set the encryption options on [bucket] to be enabled and use [kms_key]
+        Set the encryption options on [bucket] to be enabled and use [kms_key]. Uses [role_arn]
+        to create a client to perform the operation
         """
 
-        destination_s3_client = aws_client.create_client('s3', self.region, self.destination_role_arn)
+        s3_client = aws_client.create_client('s3', self.region, role_arn)
 
-        destination_s3_client.put_bucket_encryption(
+        s3_client.put_bucket_encryption(
             Bucket=bucket,
             ServerSideEncryptionConfiguration={
                 'Rules': [
@@ -196,14 +199,17 @@ class TransferS3():
 
         logging.info("Successfully set encryption on the bucket")
 
-    def sync_bucket(self, source_bucket, destination_bucket, kms_key):
+    def sync_bucket(self, source_bucket, destination_bucket, kms_key, source_role_arn, destination_role_arn):
         """
         Sync objects from [source_bucket] to [destination_bucket], ensuring all objects
-        are encrypted with [kms_key]
+        are encrypted with [kms_key].
+
+        The passing of [source_role_arn] and [destination_role_arn] is so that we can (ab)use
+        this method as a recryptor for when we need to restore from a backup account
         """
 
-        source_s3_client = aws_client.create_client('s3', self.region, self.source_role_arn)
-        destination_s3_client = aws_client.create_client('s3', self.region, self.destination_role_arn)
+        source_s3_client = aws_client.create_client('s3', self.region, source_role_arn)
+        destination_s3_client = aws_client.create_client('s3', self.region, destination_role_arn)
 
         try:
             source_objects = source_s3_client.list_objects(Bucket=source_bucket)['Contents']
