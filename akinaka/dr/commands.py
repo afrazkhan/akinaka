@@ -4,8 +4,6 @@ from akinaka.libs import helpers, scan_resources_storage
 from akinaka.libs import helpers, kms_share
 from time import gmtime, strftime
 import logging
-import pprint
-import boto3
 
 aws_client = AWS_Client()
 helpers.set_logger()
@@ -73,11 +71,11 @@ def create_kms_key(region, assumable_role_arn):
 @dr.command()
 @click.pass_context
 @click.option("--take-snapshot", is_flag=True, help="TODO: Boolean, default false. Take a live snapshot now, or take the existing latest snapshot")
-@click.option("--db-names", required=False, help="Comma separated list of DB names to transfer")
+@click.option("--names", required=False, help="Comma separated list of DB/S3 names to transfer")
 @click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
 @click.option("--retention", required=False, help="Number of days of backups to keep")
 @click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kep, don't do any actual backups")
-def transfer(ctx, take_snapshot, db_names, service, retention, rotate):
+def transfer(ctx, take_snapshot, names, service, retention, rotate):
     """
     Backup [service] from owning account of [ctx.source_role_arn] to owning account
     of [ctx.destination_role_arn].
@@ -97,11 +95,11 @@ def transfer(ctx, take_snapshot, db_names, service, retention, rotate):
     destination_kms_key = create_kms_key(region, destination_role_arn)
 
     if service == 'rds':
-        if db_names:
-            db_names = [db_names.replace(' ','')]
+        if names:
+            db_names = [names.replace(' ','')]
         else:
             scanner = scan_resources_storage.ScanResources(region, source_role_arn)
-            db_names = db_names or scanner.scan_rds_instances()['db_names']
+            db_names = scanner.scan_rds_instances()['db_names']
 
         rds(
             dry_run,
@@ -118,11 +116,11 @@ def transfer(ctx, take_snapshot, db_names, service, retention, rotate):
             rotate)
 
     if service == 'aurora':
-        if db_names:
-            db_names = [db_names.replace(' ','')]
+        if names:
+            db_names = [names.replace(' ','')]
         else:
             scanner = scan_resources_storage.ScanResources(region, source_role_arn)
-            db_names = db_names or scanner.scan_rds_aurora()['aurora_names']
+            db_names = scanner.scan_rds_aurora()['aurora_names']
 
         rds(
             dry_run,
@@ -139,7 +137,53 @@ def transfer(ctx, take_snapshot, db_names, service, retention, rotate):
             rotate)
 
     if service == 's3':
-        logging.info('TODO')
+        if names:
+            names = [names.replace(' ','')]
+        else:
+            scanner = scan_resources_storage.ScanResources(region, source_role_arn)
+            names = scanner.scan_s3()['s3_names']
+
+        s3(
+            dry_run,
+            region,
+            source_role_arn,
+            destination_role_arn,
+            names,
+            source_kms_key,
+            destination_kms_key,
+            retention
+        )
+
+def s3(
+        dry_run,
+        region,
+        source_role_arn,
+        destination_role_arn,
+        names,
+        source_kms_key,
+        destination_kms_key,
+        retention):
+    """ Call the S3 class to make backups of S3 buckets """
+
+    logging.info("Will attempt to backup the following S3 buckets, unless this is a dry run:")
+    logging.info(names)
+
+    if dry_run:
+        exit(0)
+
+    retention = retention or 7
+
+    from .s3 import transfer_s3
+    s3 = transfer_s3.TransferS3(
+        region=region,
+        source_role_arn=source_role_arn,
+        destination_role_arn=destination_role_arn,
+        source_kms_key=source_kms_key,
+        destination_kms_key=destination_kms_key,
+        retention=retention
+    )
+
+    s3.main(names)
 
 def rds(
     dry_run,

@@ -68,6 +68,5 @@ class ScanResources():
 
         s3_client = aws_client.create_client('s3', self.region, self.role_arn)
         names = [bucket['Name'] for bucket in s3_client.list_buckets()['Buckets']]
-        arns = [ "arn:aws:s3:::" + name for name in names ]
 
-        return { 's3_arns': arns }
+        return { 's3_names': names }

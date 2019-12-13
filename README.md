@@ -15,6 +15,8 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
     - [RDS Snapshots](#rds-snapshots)
   - [RDS](#rds)
     - [Copy](#copy)
+  - [Disaster Recovery](#dr)
+    - [Transfer](#transfer)
   - [Container](#container)
   - [Billing](#billing)
   - [Contributing](#contributing)
@@ -236,6 +238,161 @@ Copy encrypted RDS instances between accounts:
             --target-db-subnet SUBNET_OF_TARGET_RDS \
 
 `--region` is optional because it will default to the environment variable `AWS_DEFAULT_REGION`.
+
+## Disaster Recovery
+
+Akinaka has limited functionality for backing up and restoring data for use in disaster recovery.
+
+### Transfer
+
+Transfer data from S3, RDS, and RDS Aurora into a backup account:
+
+    akinaka dr \
+      --region eu-west-1 \
+      --source-role-arn arn:aws:iam::[LIVE_ACCOUNT_ID]:role/[ROLE_NAME] \
+      --destination-role-arn arn:aws:iam::[BACKUP_ACCOUNT_ID]:role/[ROLE_NAME] \
+      transfer \
+        --service s3
+
+Omitting "--service" will include all supported services.
+
+This requires that Akinaka is run from either an account or instance profile which can use sts:assume to assume both the `source-role-arn` and `destination-role-arn`. This is true even if you are running on the account that `destination-role-arn` is on.
+
+The following policy is needed for usage of this subcommand:
+
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "KMSEncrypt",
+                "Effect": "Allow",
+                "Action": [
+                    "kms:GetPublicKey",
+                    "kms:ImportKeyMaterial",
+                    "kms:Decrypt",
+                    "kms:UntagResource",
+                    "kms:PutKeyPolicy",
+                    "kms:GenerateDataKeyWithoutPlaintext",
+                    "kms:Verify",
+                    "kms:ListResourceTags",
+                    "kms:GenerateDataKeyPair",
+                    "kms:GetParametersForImport",
+                    "kms:TagResource",
+                    "kms:Encrypt",
+                    "kms:GetKeyRotationStatus",
+                    "kms:ReEncryptTo",
+                    "kms:DescribeKey",
+                    "kms:Sign",
+                    "kms:CreateGrant",
+                    "kms:ListKeyPolicies",
+                    "kms:UpdateKeyDescription",
+                    "kms:ListRetirableGrants",
+                    "kms:GetKeyPolicy",
+                    "kms:GenerateDataKeyPairWithoutPlaintext",
+                    "kms:ReEncryptFrom",
+                    "kms:RetireGrant",
+                    "kms:ListGrants",
+                    "kms:UpdateAlias",
+                    "kms:RevokeGrant",
+                    "kms:GenerateDataKey",
+                    "kms:CreateAlias"
+                ],
+                "Resource": [
+                    "arn:aws:kms:*:*:alias/*",
+                    "arn:aws:kms:*:*:key/*"
+                ]
+            },
+            {
+                "Sid": "KMSCreate",
+                "Effect": "Allow",
+                "Action": [
+                    "kms:DescribeCustomKeyStores",
+                    "kms:ListKeys",
+                    "kms:GenerateRandom",
+                    "kms:UpdateCustomKeyStore",
+                    "kms:ListAliases",
+                    "kms:CreateKey",
+                    "kms:ConnectCustomKeyStore",
+                    "kms:CreateCustomKeyStore"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+
+The following policies need to be attached to the assume roles to backup each service:
+
+#### RDS / RDS Aurora
+
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "RDSBackup",
+                "Effect": "Allow",
+                "Action": [
+                    "rds:DescribeDBClusterSnapshotAttributes",
+                    "rds:AddTagsToResource",
+                    "rds:RestoreDBClusterFromSnapshot",
+                    "rds:DescribeDBSnapshots",
+                    "rds:DescribeGlobalClusters",
+                    "rds:CopyDBSnapshot",
+                    "rds:CopyDBClusterSnapshot",
+                    "rds:DescribeDBSnapshotAttributes",
+                    "rds:ModifyDBSnapshot",
+                    "rds:ListTagsForResource",
+                    "rds:CreateDBSnapshot",
+                    "rds:DescribeDBClusterSnapshots",
+                    "rds:DescribeDBInstances",
+                    "rds:CreateDBClusterSnapshot",
+                    "rds:ModifyDBClusterSnapshotAttribute",
+                    "rds:ModifyDBSnapshotAttribute",
+                    "rds:DescribeDBClusters",
+                    "rds:DeleteDBSnapshot"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+
+#### S3
+
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "S3RW",
+                "Effect": "Allow",
+                "Action": [
+                    "s3:ListBucketMultipartUploads",
+                    "s3:GetObjectRetention",
+                    "s3:GetObjectVersionTagging",
+                    "s3:ListBucketVersions",
+                    "s3:CreateBucket",
+                    "s3:ListBucket",
+                    "s3:GetBucketVersioning",
+                    "s3:GetBucketAcl",
+                    "s3:GetObjectAcl",
+                    "s3:GetObject",
+                    "s3:GetEncryptionConfiguration",
+                    "s3:ListAllMyBuckets",
+                    "s3:PutLifecycleConfiguration",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectTagging",
+                    "s3:GetObjectVersionForReplication",
+                    "s3:HeadBucket",
+                    "s3:GetBucketLocation",
+                    "s3:PutBucketVersioning",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject",
+                    "s3:PutObjectAcl",
+                    "s3:PutEncryptionConfiguration",
+                    "s3:PutBucketPolicy"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
 
 ## Container
 
