@@ -33,7 +33,7 @@ The following permissions are necessary for the IAM role / user that will be run
 
     sts:AssumeRole
 
-The following permissions are necessary for the IAM role that the above role /user will be assuming, if you wish to use every single feature:
+_NOTE: Going forward, IAM policies will be listed separately for their respective subcommands (as is already the case for [Transfer](#transfer)). For now however, the following single catch-all policy can be used, attach it to the IAM profile that Akinaka will be assuming:_
 
     {
         "Version": "2012-10-17",
@@ -260,7 +260,7 @@ You can optionally specify the name of the instance to transfer with `--names` i
 
 This requires that Akinaka is run from either an account or instance profile which can use sts:assume to assume both the `source-role-arn` and `destination-role-arn`. This is true even if you are running on the account that `destination-role-arn` is on.
 
-The following policy is needed for usage of this subcommand:
+The following policy is needed for usage of this subcommand, attach it to the role you'll be assuming:
 
     {
         "Version": "2012-10-17",
@@ -322,7 +322,7 @@ The following policy is needed for usage of this subcommand:
         ]
     }
 
-The following policies need to be attached to the assume roles to backup each service:
+The following further policies need to be attached to the assume roles to backup each service:
 
 #### RDS / RDS Aurora
 
