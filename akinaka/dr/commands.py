@@ -74,7 +74,7 @@ def create_kms_key(region, assumable_role_arn):
 @click.option("--names", required=False, help="Comma separated list of DB/S3 names to transfer")
 @click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
 @click.option("--retention", required=False, help="Number of days of backups to keep")
-@click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kep, don't do any actual backups. Relevant for RDS only")
+@click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kept, don't do any actual backups. Relevant for RDS only")
 def transfer(ctx, take_snapshot, names, service, retention, rotate):
     """
     Creates and passes shared KMS keys to the subcommands which wish to tranfer data between eachother.
