@@ -15,7 +15,7 @@ At the moment it only does three things; blue/green deploys for plugging into Gi
     - [RDS Snapshots](#rds-snapshots)
   - [RDS](#rds)
     - [Copy](#copy)
-  - [Disaster Recovery](#dr)
+  - [Disaster Recovery](#disaster-recovery)
     - [Transfer](#transfer)
   - [Container](#container)
   - [Billing](#billing)
