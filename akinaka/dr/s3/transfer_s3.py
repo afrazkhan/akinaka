@@ -86,7 +86,7 @@ class TransferS3():
                 ACL='private',
                 Bucket=new_bucket_name,
                 CreateBucketConfiguration={
-                    'LocationConstraint': 'EU'
+                    'LocationConstraint': self.region
                 }
             )
 

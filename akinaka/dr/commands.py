@@ -70,13 +70,15 @@ def create_kms_key(region, assumable_role_arn):
 
 @dr.command()
 @click.pass_context
-@click.option("--take-snapshot", is_flag=True, help="TODO: Boolean, default false. Take a live snapshot now, or take the existing latest snapshot")
+@click.option("--take-snapshot", is_flag=True, help="Boolean, default false. Take a live snapshot now, or take the existing latest snapshot. Relevant only for RDS")
 @click.option("--names", required=False, help="Comma separated list of DB/S3 names to transfer")
 @click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
 @click.option("--retention", required=False, help="Number of days of backups to keep")
 @click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kep, don't do any actual backups. Relevant for RDS only")
 def transfer(ctx, take_snapshot, names, service, retention, rotate):
     """
+    Creates and passes shared KMS keys to the subcommands which wish to tranfer data between eachother.
+
     Backup [service] from owning account of [ctx.source_role_arn] to owning account
     of [ctx.destination_role_arn].
     """
@@ -202,7 +204,7 @@ def rds(
     Call the RDS class to transfer snapshots
     """
 
-    logging.info("Will attempt to backup the following RDS instances, unless this is a dry run:")
+    logging.info("Will attempt to backup the data for following RDS instances, unless this is a dry run:")
     logging.info(db_names)
 
     if dry_run:

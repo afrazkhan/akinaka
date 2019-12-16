@@ -258,7 +258,24 @@ Omitting `--service` will include all supported services.
 
 You can optionally specify the name of the instance to transfer with `--names` in a comma separated list, e.g. `--names 'database-1, database-2`. This can be for either RDS instances, or S3 buckets, but not both at the same time. Future versions may remove `--service` and replace it with a subcommand instead, i.e. `akinaka dr transfer rds`, so that those service can have `--names` to themselves.
 
-This requires that Akinaka is run from either an account or instance profile which can use sts:assume to assume both the `source-role-arn` and `destination-role-arn`. This is true even if you are running on the account that `destination-role-arn` is on.
+A further limitation is that only a single region can be handled at a time for S3 buckets. If you wish to backup all S3 buckets in an account, and they are in different regions, you will have to specify them per run, using the appropriate region each time. Future versions will work the bucket regions out automatically, and remove this limitation.
+
+Akinaka must be run from either an account or instance profile which can use sts:assume to assume both the `source-role-arn` and `destination-role-arn`. This is true even if you are running on the account that `destination-role-arn` is on. You will therefore need this policy attached to the user/role that's doing the assuming:
+
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "akinakaassume",
+                "Effect": "Allow",
+                "Action": "sts:AssumeRole",
+                "Resource": [
+                    "arn:aws:iam::[DESTINATION_ACCOUNT]:role/[ROLE_TO_ASSUME]",
+                    "arn:aws:iam::[SOURCE_ACCOUNT]:role/[ROLE_TO_ASSUME]"
+                ]
+            }
+        ]
+    }
 
 The following policy is needed for usage of this subcommand, attach it to the role you'll be assuming:
 
