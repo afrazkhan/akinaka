@@ -277,6 +277,8 @@ Akinaka must be run from either an account or instance profile which can use sts
         ]
     }
 
+**Note:** A period of 4 hours (469822 seconds) is hardcoded into the sts:assume call made in the RDS snapshot class, since snapshot creation can take a very long time. This must therefore be the minimum value for the role's `max-session-duration`.
+
 The following policy is needed for usage of this subcommand, attach it to the role you'll be assuming:
 
     {
