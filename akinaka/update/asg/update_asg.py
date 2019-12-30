@@ -92,13 +92,13 @@ class ASG():
 
         scale_to = self.get_current_scale(active_asg)
 
-        logging.info("Scaling ASG down")
+        logging.info("Scaling ASG '{}' down to ({}, {}, {})".format(inactive_asg, 0, 0, 0))
         self.scale(inactive_asg, 0, 0, 0)
         while not self.asg_is_empty(inactive_asg):
-            logging.info("Waiting for instances in ASG to terminate")
+            logging.info("Waiting for instances in ASG '{}' to terminate".format(inactive_asg))
             sleep(10)
 
-        logging.info("Scaling ASG back up")
+        logging.info("Scaling ASG '{}' back up to ({}, {}, {})".format(inactive_asg, scale_to['min'], scale_to['max'], scale_to['desired']))
         self.scale(
             auto_scaling_group_id = inactive_asg,
             min_size = scale_to['min'],
