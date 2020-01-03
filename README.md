@@ -369,7 +369,8 @@ The following further policies need to be attached to the assume roles to backup
                     "rds:ModifyDBClusterSnapshotAttribute",
                     "rds:ModifyDBSnapshotAttribute",
                     "rds:DescribeDBClusters",
-                    "rds:DeleteDBSnapshot"
+                    "rds:DeleteDBSnapshot",
+                    "rds:DeleteDBClusterSnapshot"
                 ],
                 "Resource": "*"
             }

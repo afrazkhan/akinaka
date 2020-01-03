@@ -38,7 +38,7 @@ class TransferSnapshot():
         self.source_kms_key = source_kms_key
         self.destination_kms_key = destination_kms_key
 
-    def transfer_snapshot(self, take_snapshot, db_names, source_account, destination_account, retention):
+    def transfer_snapshot(self, take_snapshot, db_names, source_account, destination_account, keep, retention):
         """
         For every DB in [db_names], call methods to perform the actions listed in this module's
         docstring. Additionally, rotate the oldest snapshot out, if there are more than [retention]
@@ -61,28 +61,37 @@ class TransferSnapshot():
             destination_rds_client = aws_client.create_client('rds', self.region, self.destination_role_arn, valid_for=14400)
             self.recrypt_snapshot(destination_rds_client, recrypted_snapshot, self.destination_kms_key, destination_account)
 
-            self.rotate_snapshots(retention, db_name)
+            self.rotate_snapshots(retention, db_name, keep=None)
 
-    def rotate_snapshots(self, retention, db_name):
+    def rotate_snapshots(self, retention, db_name, keep):
         """
         Get all the snapshots for [db_name], and delete the oldest one if there are more than
-        [retention] of them.
+        [retention] of them. Ignore any in the list [keep].
 
         Beware, this does not take distinct days into account, only the number of snapshots. So if you
         take more than [retention] snapshots in one day, all previous snapshots will be deleted
         """
+
+        keep = keep or []
 
         destination_rds_client = aws_client.create_client('rds', self.region, self.destination_role_arn, valid_for=14400)
 
         snapshots = destination_rds_client.describe_db_snapshots(DBInstanceIdentifier=db_name)['DBSnapshots']
         if len(snapshots) > retention:
             oldest_snapshot = sorted(snapshots, key=itemgetter('SnapshotCreateTime'))[-1]
-            logging.info("There are more than the given retention number of snapshots in the account," \
-                "so we're going to delete the oldes: {}".format(oldest_snapshot['DBSnapshotIdentifier'])
-            )
-            destination_rds_client.delete_db_snapshot(
-                DBSnapshotIdentifier=oldest_snapshot['DBSnapshotIdentifier']
-            )
+
+            if oldest_snapshot['DBSnapshotIdentifier'] not in keep:
+                logging.info("There are more than the given retention number of snapshots in the account," \
+                    "so we're going to delete the oldest: {}".format(oldest_snapshot['DBSnapshotIdentifier'])
+                )
+
+                destination_rds_client.delete_db_snapshot(
+                    DBSnapshotIdentifier=oldest_snapshot['DBSnapshotIdentifier']
+                )
+            else:
+                logging.info("Oldest snapshot ({}) is older than" \
+                             "the retention period allows, but it's " \
+                             "the --keep list so it will not be deleted".format(oldest_snapshot['DBSnapshotIdentifier']))
 
     def get_latest_snapshot(self, db_name):
         """

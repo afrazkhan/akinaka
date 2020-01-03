@@ -71,11 +71,12 @@ def create_kms_key(region, assumable_role_arn):
 @dr.command()
 @click.pass_context
 @click.option("--take-snapshot", is_flag=True, help="Boolean, default false. Take a live snapshot now, or take the existing latest snapshot. Relevant only for RDS")
-@click.option("--names", required=False, help="Comma separated list of DB/S3 names to transfer")
+@click.option("--names", required=False, help="Comma separated list in quotes of DB/S3 names to transfer")
 @click.option("--service", type=click.Choice(['rds', 'aurora', 's3']), required=False, help="The service to transfer backups for. Defaults to all (RDS, S3)")
 @click.option("--retention", required=False, help="Number of days of backups to keep")
 @click.option("--rotate", is_flag=True, required=False, help="Only rotate backups so [retention] number of days is kept, don't do any actual backups. Relevant for RDS only")
-def transfer(ctx, take_snapshot, names, service, retention, rotate):
+@click.option("--keep", required=False, help="Comma separated list in quotes. Do not delete these snapshot IDs as part of the rotation policy.")
+def transfer(ctx, take_snapshot, names, service, retention, keep, rotate):
     """
     Creates and passes shared KMS keys to the subcommands which wish to tranfer data between eachother.
 
@@ -103,6 +104,9 @@ def transfer(ctx, take_snapshot, names, service, retention, rotate):
             scanner = scan_resources_storage.ScanResources(region, source_role_arn)
             db_names = scanner.scan_rds_instances()['db_names']
 
+        if keep:
+            keep = [keep.replace(' ','')]
+
         rds(
             dry_run,
             region,
@@ -115,6 +119,7 @@ def transfer(ctx, take_snapshot, names, service, retention, rotate):
             source_account,
             destination_account,
             retention,
+            keep,
             rotate)
 
     if service == 'aurora':
@@ -136,6 +141,7 @@ def transfer(ctx, take_snapshot, names, service, retention, rotate):
             source_account,
             destination_account,
             retention,
+            keep,
             rotate)
 
     if service == 's3':
@@ -199,6 +205,7 @@ def rds(
     source_account,
     destination_account,
     retention,
+    keep,
     rotate):
     """
     Call the RDS class to transfer snapshots
@@ -223,7 +230,7 @@ def rds(
 
     if rotate:
         for db_name in db_names:
-            rds.rotate_snapshots(retention, db_name)
+            rds.rotate_snapshots(retention, db_name, keep)
         exit()
 
     rds.transfer_snapshot(
@@ -231,5 +238,6 @@ def rds(
         db_names=db_names,
         source_account=source_account,
         destination_account=destination_account,
+        keep=keep,
         retention=retention
     )
