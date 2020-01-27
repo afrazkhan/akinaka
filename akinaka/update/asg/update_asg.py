@@ -70,17 +70,8 @@ class ASG():
         inactive_asg = asg_liveness_info['inactive_asg']
         active_asg = asg_liveness_info['active_asg']
         new_ami = ami
-        current_lt_info = self.get_launch_template_info(self.get_lt_name(inactive_asg))
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
-
-        # Set the current ASG to the current launch template version. Shouldn't actually be necessary,
-        # since it's done during the previous deploy, but including for completeness and paranoia
-        self.set_asg_launch_template_version(
-            asg=active_asg,
-            lt_id=current_lt_info["id"],
-            lt_version=current_lt_info["version"],
-        )
 
         # Update the lt and set the soon to be new ASG to the new launch template version
         updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
