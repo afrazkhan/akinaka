@@ -67,6 +67,8 @@ class TargetGroup():
     def switch_asg(self):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+        elb_waiter = elb_client.get_waiter('target_in_service')
         asgs = asg_client.describe_auto_scaling_groups()
 
         asgs_by_status = self.group_asgs_by_status(asgs, self.new_asg)
@@ -82,6 +84,11 @@ class TargetGroup():
         # Get the target group ARNs from the active auto scaling group
         target_group_arns = active_asg[0]['TargetGroupARNs']
 
+        # Get the instance IDs from the inactive auto scaling group
+        inactive_asg_instances = []
+        for instance in inactive_asg[0]['Instances']:
+            inactive_asg_instances.append(dict(Id=instance['InstanceId']))
+
         # Add the ASG to the target group ARNs
         try:
             for asg in inactive_asg:
@@ -91,6 +98,15 @@ class TargetGroup():
                 )
         except Exception as e:
             logging.error("Couldn't attach the new ASG {} to the target group {}".format(inactive_asg, target_group_arns))
+            logging.error(e)
+            # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
+            exit(1)
+
+        # Check if the newly attached instances are reported healthy in the target group before detaching the old ASG
+        try:
+            elb_waiter.wait(TargetGroupArn=target_group_arns, Targets=inactive_asg_instances)
+        except Exception as e:
+            logging.error("One or more instances from the new ASG {} are not InService to the target group {}".format(inactive_asg, target_group_arns))
             logging.error(e)
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
