@@ -110,6 +110,8 @@ class TargetGroup():
             logging.error(e)
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
+        else:
+            logging.info("The instances from the {} ASG became InService in the target group.".format(inactive_asg))
 
         # Remove the asg from the target group
         try:
