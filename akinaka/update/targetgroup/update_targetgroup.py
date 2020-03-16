@@ -67,11 +67,15 @@ class TargetGroup():
     def switch_asg(self):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+        elb_waiter = elb_client.get_waiter('target_in_service')
         asgs = asg_client.describe_auto_scaling_groups()
 
         asgs_by_status = self.group_asgs_by_status(asgs, self.new_asg)
         active_asg = asgs_by_status['active_asg']
         inactive_asg = asgs_by_status['inactive_asg']
+        inactive_asg_name = inactive_asg[0]['AutoScalingGroupName']
+        active_asg_name = active_asg[0]['AutoScalingGroupName']
 
         logging.debug("switch_asg(): asgs_by_status: {}, active_asg: {}, inactive_asg: {}".format(asgs_by_status, active_asg, inactive_asg))
 
@@ -82,7 +86,13 @@ class TargetGroup():
         # Get the target group ARNs from the active auto scaling group
         target_group_arns = active_asg[0]['TargetGroupARNs']
 
+        # Get the instance IDs from the inactive auto scaling group
+        inactive_asg_instances = []
+        for instance in inactive_asg[0]['Instances']:
+            inactive_asg_instances.append(dict(Id=instance['InstanceId']))
+
         # Add the ASG to the target group ARNs
+        logging.info(f"Attaching the {inactive_asg_name} ASG to the target group...")
         try:
             for asg in inactive_asg:
                 asg_client.attach_load_balancer_target_groups(
@@ -90,12 +100,29 @@ class TargetGroup():
                     TargetGroupARNs=target_group_arns
                 )
         except Exception as e:
-            logging.error("Couldn't attach the new ASG {} to the target group {}".format(inactive_asg, target_group_arns))
+            logging.error(f"Couldn't attach the new {inactive_asg_name} ASG to the {target_group_arns} target group!")
             logging.error(e)
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
+        else:
+            logging.info("Done!")
+
+        # Check if the newly attached instances are reported healthy in the target group before detaching the old ASG
+        logging.info(f"Waiting for the instances from the {inactive_asg_name} ASG to become Healthy targets...")
+        for tg in target_group_arns:
+            try:
+                elb_waiter.wait(TargetGroupArn=tg, Targets=inactive_asg_instances)
+            except Exception as e:
+                logging.error("Some of them did not register as Healthy... Check/Detach them manually !!!")
+                logging.error("Quitting...")
+                logging.error(e)
+                # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
+                exit(1)
+            else:
+                logging.info("Done!")
 
         # Remove the asg from the target group
+        logging.info(f"Detaching the {active_asg_name} ASG from the target group...")
         try:
             for asg in active_asg:
                 asg_client.detach_load_balancer_target_groups(
@@ -103,9 +130,11 @@ class TargetGroup():
                     TargetGroupARNs=target_group_arns
                 )
         except Exception as e:
-            logging.error("Couldn't attach the new ASG {} to the target group {}".format(inactive_asg, target_group_arns))
+            logging.error(f"Could not detach the old {inactive_asg} ASG from the {target_group_arns} target group!")
             logging.error(e)
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
+        else:
+            logging.info("Done!")
 
         return
