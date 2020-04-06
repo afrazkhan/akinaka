@@ -130,6 +130,7 @@ class ASG():
         max_attempts = 300
         while len(self.asgs_healthy_instances(inactive_asg)) < scale_to['desired'] and attempts != max_attempts:
             logging.info("Waiting for all instances to be healthy ...")
+            sleep(1)
             attempts += 1
             if attempts == max_attempts:
                 logging.info("Max timeout reached without success... Exiting!")
