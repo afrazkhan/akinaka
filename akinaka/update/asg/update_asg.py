@@ -125,9 +125,16 @@ class ASG():
                 logging.info("No output from instance yet. Trying again in 10 seconds.")
             sleep(10)
 
-        # Wait for remaining instances (if any) to come up too
-        while len(self.asgs_healthy_instances(inactive_asg)) < scale_to['desired']:
+        # Wait for remaining instances (if any) to come up too (up to 5 minutes = 300 attempts)
+        attempts = 0
+        max_attempts = 300
+        while len(self.asgs_healthy_instances(inactive_asg)) < scale_to['desired'] and attempts != max_attempts:
             logging.info("Waiting for all instances to be healthy ...")
+            sleep(1)
+            attempts += 1
+            if attempts == max_attempts:
+                logging.info("Max timeout reached without success... Exiting!")
+                raise exceptions.AkinakaLoggingError
 
         logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
         open("inactive_asg.txt", "w").write(inactive_asg)
