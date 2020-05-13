@@ -137,4 +137,22 @@ class TargetGroup():
         else:
             logging.info("Done!")
 
+        # Scale down the old (detached) ASG to 0/0/0
+        logging.info(f"Scaling down the {active_asg_name} ASG to 0/0/0...")
+        try:
+            for asg in active_asg:
+                asg_client.update_auto_scaling_group(
+                    AutoScalingGroupName=asg['AutoScalingGroupName'],
+                    MinSize=0,
+                    MaxSize=0,
+                    DesiredCapacity=0
+                )
+        except Exception as e:
+            logging.error(f"Could not scale down the old {inactive_asg} ASG!")
+            logging.error(e)
+            # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
+            exit(1)
+        else:
+            logging.info("Done!")
+
         return
