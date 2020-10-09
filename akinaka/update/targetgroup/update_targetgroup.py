@@ -105,24 +105,23 @@ class TargetGroup():
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
         else:
-            logging.info("Done!")
+            logging.info(f"Successfully attached {inactive_asg} to {target_group_arns}")
 
         # Check if the newly attached instances are reported healthy in the target group before detaching the old ASG
-        logging.info(f"Waiting for the instances from the {inactive_asg_name} ASG to become Healthy targets...")
+        logging.info(f"Waiting for the instances from the {inactive_asg_name} ASG to become Healthy targets")
         for tg in target_group_arns:
             try:
                 elb_waiter.wait(TargetGroupArn=tg, Targets=inactive_asg_instances)
             except Exception as e:
-                logging.error("Some of them did not register as Healthy... Check/Detach them manually !!!")
-                logging.error("Quitting...")
+                logging.error("Some of them did not register as Healthy. Check/Detach them manually. Quiting")
                 logging.error(e)
                 # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
                 exit(1)
             else:
-                logging.info("Done!")
+                logging.info(f"All instances in new ASG {inactive_asg_name} reported as healthy")
 
         # Remove the asg from the target group
-        logging.info(f"Detaching the {active_asg_name} ASG from the target group...")
+        logging.info(f"Detaching the {active_asg_name} ASG from the target group")
         try:
             for asg in active_asg:
                 asg_client.detach_load_balancer_target_groups(

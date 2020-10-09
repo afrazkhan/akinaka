@@ -3,6 +3,7 @@ from akinaka.client.aws_client import AWS_Client
 from akinaka.libs import helpers
 from time import gmtime, strftime
 import logging
+import sys
 
 @click.group()
 @click.option("--region", required=True, help="Region your resources are located in")
@@ -81,13 +82,19 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
 
     if [lb, asg_name, target_group].count(None) < 2:
         logging.error("--lb, --asg, and --target-group are mutually exclusive. Please use only one")
+        sys.exit(1)
+
+    if not lb and not asg_name and not target_group:
+        logging.error("Please use either --lb, --asg, or --target-group")
+        sys.exit(1)
 
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
+    log_level = ctx.obj.get('log_level')
 
     from .asg import update_asg
 
-    asg = update_asg.ASG(region, role_arn)
+    asg = update_asg.ASG(region, role_arn, log_level)
     application = asg.get_application_name(asg=asg_name, loadbalancer=lb, target_group=target_group)
 
     if lb or target_group:
@@ -134,10 +141,11 @@ def scale_down_inactive(ctx, active_asg, skip_status_check):
 
     region = ctx.obj.get('region')
     role_arn = ctx.obj.get('role_arn')
+    log_level = ctx.obj.get('log_level')
 
     from .asg import update_asg
 
-    asg = update_asg.ASG(region=region, role_arn=role_arn)
+    asg = update_asg.ASG(region=region, role_arn=role_arn, log_level=log_level)
 
     asg.scale_down_inactive(active_asg)
     exit(0)

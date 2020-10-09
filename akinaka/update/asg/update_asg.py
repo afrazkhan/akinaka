@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 from time import sleep
 from akinaka.libs import helpers
 from akinaka.libs import exceptions
@@ -13,9 +14,10 @@ aws_client = AWS_Client()
 class ASG():
     """All the methods needed to perform a blue/green deploy"""
 
-    def __init__(self, region, role_arn):
+    def __init__(self, region, role_arn, log_level):
         self.region = region
         self.role_arn = role_arn
+        logging.getLogger().setLevel(log_level)
 
     def get_application_name(self, asg, loadbalancer=None, target_group=None):
         """
@@ -64,7 +66,70 @@ class ASG():
             }
         )
 
+    def rescale(self, active_asg, inactive_asg):
+        """
+        Scales [inactive_asg] to the same values as those found in [active_asg]
+
+        Returns True on success and exits with a code of 1 if scaling failed
+        """
+
+        active_asg_size = self.get_current_scale(active_asg)
+
+        logging.info('Scaling to 0 first to start with a clean slate')
+        self.scale(inactive_asg, 0, 0, 0)
+        logging.info(f"Scaling ASG {inactive_asg} to {active_asg_size['min']}, {active_asg_size['max']}, {active_asg_size['desired']}")
+        logging.info('Scaling to match the numbers from the active ASG')
+        self.scale(
+            asg = inactive_asg,
+            min_size = active_asg_size['min'],
+            max_size = active_asg_size['max'],
+            desired =  active_asg_size['desired']
+        )
+
+        return True
+
+    def asg_instance_list(self, asg):
+        """
+        TODO: Can this replace get_auto_scaling_group_instances()?
+
+        Return a list of instances from [asg]
+        """
+
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        asg_info = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])
+        return asg_info['AutoScalingGroups'][0]['Instances']
+
+    def scale_waiter(self, asg, desired_scale, timeout=600):
+        """
+        Scales [asg] to [desired_scale] and waits [timeout] seconds for all instances
+        to become healthy. [timeout] defaults to 600
+
+        Returns True on success, or False on failure
+        """
+
+        max_attempts = timeout/20
+        attempts = 0
+
+        while len(self.asg_instance_list(asg)) != desired_scale or (len(self.asgs_healthy_instances(asg)) < desired_scale and attempts != max_attempts):
+            logging.info("Waiting for scaling event to finish successfully. Next poll in 20 seconds")
+
+            sleep(20)
+            attempts += 1
+            if attempts == max_attempts:
+                logging.info("Timeout reached without success whilst waiting for all instances to become healthy")
+                return False
+
+        return True
+
     def do_update(self, ami, asg=None, loadbalancer=None, target_group=None):
+        """
+        Calls necessary methods to perform an update:
+
+        1. Figures out which ASGs are active and inactive
+        2. Creates new launch template version with AMI set to [ami]
+        3. Scales inactive ASG down, then back up using the new launch template version
+        """
+
         asg_liveness_info = self.asgs_by_liveness(asg=asg, loadbalancer=loadbalancer, target_group=target_group)
 
         inactive_asg = asg_liveness_info['inactive_asg']
@@ -73,7 +138,6 @@ class ASG():
 
         logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
 
-        # Update the lt and set the soon to be new ASG to the new launch template version
         updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
         self.set_asg_launch_template_version(
             asg=inactive_asg,
@@ -81,67 +145,46 @@ class ASG():
             lt_version=updated_lt["version"]
         )
 
-        scale_to = self.get_current_scale(active_asg)
+        self.rescale(active_asg, inactive_asg)
 
-        logging.info("Scaling ASG '{}' down to ({}, {}, {})".format(inactive_asg, 0, 0, 0))
-        self.scale(inactive_asg, 0, 0, 0)
-        while not self.asg_is_empty(inactive_asg):
-            logging.info("Waiting for instances in ASG '{}' to terminate".format(inactive_asg))
-            sleep(10)
+        self.log_new_asg_name(inactive_asg)
 
-        logging.info("Scaling ASG '{}' back up to ({}, {}, {})".format(inactive_asg, scale_to['min'], scale_to['max'], scale_to['desired']))
-        self.scale(
-            auto_scaling_group_id = inactive_asg,
-            min_size = scale_to['min'],
-            max_size = scale_to['max'],
-            desired =  scale_to['desired']
+    def refresh_asg(self, asg):
+        """
+        UNUSED CODE
+
+        Triggers and monitors an ASG refresh call of [asg]. This function is no longer used,
+        but kept since could be useful in some circumstances
+
+        Returns True on success and False on failure
+        """
+
+        logging.info(f"Starting instance refresh for ASG {asg}")
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        asg_client.start_instance_refresh(
+            AutoScalingGroupName=asg,
+            Preferences={
+                'MinHealthyPercentage': 0,
+                'InstanceWarmup': 0
+            }
         )
 
-        while len(self.get_auto_scaling_group_instances(inactive_asg)) < 1:
-            logging.info("Waiting for instances in ASG to start ...")
-            sleep(10)
+        refresh_status = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
+        while refresh_status['Status'] != 'Successful':
+            logging.info(f"ASG refresh result:\n{refresh_status}\nNext poll in 20 seconds.")
+            refresh_status = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
+            if refresh_status['Status'] == 'Failed' or refresh_status['Status'] == 'Cancelling':
+                logging.error('The rollout failed, exiting. You must clean up the failed deploy manually')
+                return False
+            sleep(20)
 
-        logging.info("First instance has started")
+        return True
 
-        # Try to get information for an instance in the new ASG 20 times
-        for i in range(20):
-            try:
-                first_new_instance = self.get_first_new_instance(inactive_asg)
-                if i == 20:
-                    raise exceptions.AkinakaCriticalException
-                break
-            except exceptions.AkinakaLoggingError as error:
-                logging.info("Retry {}".format(i))
-                logging.info("Problem in getting data for first new ASG instance")
-                logging.info("get_auto_scaling_group_instances() returned: {}".format(self.get_auto_scaling_group_instances(inactive_asg)))
-                logging.info("Error was: {}".format(error))
-
-        # Show console output for first instance up until it's Lifecycle Hook has passed
-        while self.get_auto_scaling_group_instances(auto_scaling_group_id=inactive_asg, instance_ids=[first_new_instance])[0]['LifecycleState'] != "InService":
-            try:
-                logging.info("Attempting to retrieve console output from first instance up -- this will not work for non-nitro hypervisor VMs")
-                logging.info(self.get_instance_console_output(first_new_instance)['Output'])
-            except KeyError:
-                logging.info("No output from instance yet. Trying again in 10 seconds.")
-            sleep(10)
-
-        # Gets the actual configured sizes of the inactive ASG
-        inactive_asg_size = self.get_current_scale(inactive_asg)
-        logging.info("'{}' sizes currently set to (min: {}, max: {}, desired: {})".format(inactive_asg, inactive_asg_size['min'], inactive_asg_size['max'], inactive_asg_size['desired']))
-
-        # Wait for remaining instances (if any) to come up too (up to 10 minutes = 300 attempts + 1 sec sleep on each attempt)
-        attempts = 0
-        max_attempts = 300
-        while len(self.asgs_healthy_instances(inactive_asg)) < inactive_asg_size['desired'] and attempts != max_attempts:
-            logging.info("Waiting for all instances to be healthy ...")
-            sleep(1)
-            attempts += 1
-            if attempts == max_attempts:
-                logging.info("Max timeout reached without success... Exiting!")
-                raise exceptions.AkinakaLoggingError
+    def log_new_asg_name(self, new_asg_name):
+        """ Write [new_asg_name] to 'inactive_asg.txt' """
 
         logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
-        open("inactive_asg.txt", "w").write(inactive_asg)
+        open("inactive_asg.txt", "w").write(new_asg_name)
 
     def get_first_new_instance(self, new_asg):
         asg_instances = self.get_auto_scaling_group_instances(new_asg)
@@ -313,24 +356,30 @@ class ASG():
             "version": launch_template_new_version
         }
 
-    def scale(self, auto_scaling_group_id, min_size, max_size, desired):
-        """Scale an ASG to {'min_size', 'max_size', 'desired'}"""
+    def scale(self, asg, min_size, max_size, desired):
+        """
+        Scale [asg] to {'min_size', 'max_size', 'desired'}, using scale_waiter()
+        to wait for the ASG to be healthy again
+
+        Returns the response from the call on success, or calls sys.exit(1) on failure
+        """
 
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
-
         response = asg_client.update_auto_scaling_group(
-            AutoScalingGroupName=auto_scaling_group_id,
+            AutoScalingGroupName=asg,
             MinSize=min_size,
             MaxSize=max_size,
             DesiredCapacity=desired
         )
 
+        if self.scale_waiter(asg, desired) == False:
+            sys.exit(1)
+
         return response
 
     def get_current_scale(self, asg):
         """
-        Returns the current scales of the given ASG as dict {'desired', 'min', 'max'},
-        expects ASG ID as argument
+        Returns the current scales of [asg] as dict {'desired', 'min', 'max'}
         """
 
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
@@ -352,7 +401,7 @@ class ASG():
             if i['AutoScalingGroupName'] == auto_scaling_group_id:
                 target_instances.append(i)
 
-                logging.debug("Instance {instance_id} has state = {instance_state},"
+                logging.info("Instance {instance_id} has state = {instance_state}, "
                     "Lifecycle is at {instance_lifecycle_state}".format(
                         instance_id = i['InstanceId'],
                         instance_state = i['HealthStatus'],
