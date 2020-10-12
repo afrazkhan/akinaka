@@ -131,9 +131,9 @@ def targetgroup(ctx, new_asg_target):
 
 @update.command()
 @click.pass_context
-@click.option("--active-asg", "active_asg", help="Name of the currently active ASG")
+@click.option("--target-group", "target_group", required=True, help="Target Group to discover the ASG for updating. Mutually exclusive with --asg and --lb")
 @click.option("--skip-status-check", "skip_status_check", is_flag=True, default=False, help="When passed, skips checking if we're already in the middle of a deploy")
-def scale_down_inactive(ctx, active_asg, skip_status_check):
+def scale_down_inactive(ctx, target_group, skip_status_check):
     """
     Given an the name of the _active_ ASG, scale down the inactive one. Only useful for
     blue/green deploys
@@ -147,5 +147,5 @@ def scale_down_inactive(ctx, active_asg, skip_status_check):
 
     asg = update_asg.ASG(region=region, role_arn=role_arn, log_level=log_level)
 
-    asg.scale_down_inactive(active_asg)
+    asg.scale_down_inactive(target_group)
     exit(0)

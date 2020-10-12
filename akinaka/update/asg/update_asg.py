@@ -49,11 +49,18 @@ class ASG():
 
         return {"inactive_asg": inactive_asg, "active_asg": active_asg}
 
-    def scale_down_inactive(self, asg):
-        # NOTE: We're making the heavy presumption here that the _active_ ASG is the one we've been
-        #       given from the command line
-        inactive_asg = self.get_inactive_asg(asg)
+    def scale_down_inactive(self, target_group):
+        """
+        Given [target_group], work out which ASG is the inactive one, and scale it down to 0.
+
+        Returns True on success, or calls sys.exit(1) on failure (via self.scale())
+        """
+        target_group_arn = self.get_target_group_arn(target_group=target_group)
+        active_asg = self.get_active_asg(target_group_arn)
+        inactive_asg = self.get_inactive_asg(active_asg)
         self.scale(inactive_asg, 0, 0, 0)
+
+        return True
 
     def set_asg_launch_template_version(self, asg, lt_id, lt_version):
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
@@ -195,10 +202,16 @@ class ASG():
 
         Both are mutually exclusive, and at least one must be supplied
         """
-
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
         if target_group is not None:
-            return alb_client.describe_target_groups(Names=[target_group])['TargetGroups'][0]['TargetGroupArn']
+            try:
+                return alb_client.describe_target_groups(Names=[target_group])['TargetGroups'][0]['TargetGroupArn']
+            except alb_client.exceptions.TargetGroupNotFoundException as e:
+                logging.error(f"Couldn't describe the target group {target_group}. Does it exist?\n{e}")
+                all_target_groups_info = alb_client.describe_target_groups()['TargetGroups']
+                all_target_groups = [ tg['TargetGroupName'] for tg in all_target_groups_info ]
+                logging.error(f"Here's a list of all target groups I could find. Some may belong to different deployments: {all_target_groups}")
+                sys.exit(1)
 
         loadbalancer_raw_info = alb_client.describe_load_balancers(Names=[loadbalancer])
         loadbalancer_arn = loadbalancer_raw_info['LoadBalancers'][0]['LoadBalancerArn']
