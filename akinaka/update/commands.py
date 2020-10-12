@@ -106,8 +106,9 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
 
 @update.command()
 @click.pass_context
-@click.option("--new", "new_asg_target", help="The ASG we're switching the LB to (attaching this ASG to the LB's targetgroup)")
-def targetgroup(ctx, new_asg_target):
+@click.option("--new", "-n", "new_asg_target", help="The ASG we're switching the LB to (attaching this ASG to the LB's targetgroup)")
+@click.option("--scale-down-inactive", "-s", "scale_down_inactive", is_flag=True)
+def targetgroup(ctx, new_asg_target, scale_down_inactive):
     """
     Switch the load balancer to serve from a different ASG by attaching the new one and detaching the
     old one, from the target group
@@ -121,7 +122,7 @@ def targetgroup(ctx, new_asg_target):
 
     try:
         target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target, log_level)
-        target_groups.switch_asg()
+        target_groups.switch_asg(scale_down_inactive)
         # We've successfully deployed, so set the status of deploy to "false"
         set_deploy_status("stop", region, role_arn, target_groups.get_application_name())
         exit(0)

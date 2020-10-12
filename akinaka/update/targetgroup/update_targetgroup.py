@@ -64,7 +64,7 @@ class TargetGroup():
 
         return {'active_asg': active_asg, 'inactive_asg': inactive_asg}
 
-    def switch_asg(self):
+    def switch_asg(self, scale_down_inactive=False):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
         elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
@@ -135,5 +135,24 @@ class TargetGroup():
             exit(1)
         else:
             logging.info(f"Detached {inactive_asg} from {target_group_arns}")
+
+        if scale_down_inactive:
+            # Scale down the old (detached) ASG to 0/0/0
+            logging.info(f"Scaling down {active_asg_name} to 0")
+            try:
+                for asg in active_asg:
+                    asg_client.update_auto_scaling_group(
+                        AutoScalingGroupName=asg['AutoScalingGroupName'],
+                        MinSize=0,
+                        MaxSize=0,
+                        DesiredCapacity=0
+                    )
+            except Exception as e:
+                logging.error(f"Could not scale down the old {inactive_asg} ASG")
+                logging.error(e)
+                # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
+                exit(1)
+            else:
+                logging.info(f"Scaled down {active_asg_name} to 0")
 
         return
