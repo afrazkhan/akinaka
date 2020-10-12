@@ -101,7 +101,7 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
         if not skip_status_check:
             set_deploy_status("start", region, role_arn, application)
 
-    asg.do_update(ami, asg=asg_name, loadbalancer=lb, target_group=target_group)
+    asg.main(ami, asg=asg_name, loadbalancer=lb, target_group=target_group)
     exit(0)
 
 @update.command()

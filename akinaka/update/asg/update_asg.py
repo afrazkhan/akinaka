@@ -121,34 +121,6 @@ class ASG():
 
         return True
 
-    def do_update(self, ami, asg=None, loadbalancer=None, target_group=None):
-        """
-        Calls necessary methods to perform an update:
-
-        1. Figures out which ASGs are active and inactive
-        2. Creates new launch template version with AMI set to [ami]
-        3. Scales inactive ASG down, then back up using the new launch template version
-        """
-
-        asg_liveness_info = self.asgs_by_liveness(asg=asg, loadbalancer=loadbalancer, target_group=target_group)
-
-        inactive_asg = asg_liveness_info['inactive_asg']
-        active_asg = asg_liveness_info['active_asg']
-        new_ami = ami
-
-        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
-
-        updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
-        self.set_asg_launch_template_version(
-            asg=inactive_asg,
-            lt_id=updated_lt["id"],
-            lt_version=updated_lt["version"]
-        )
-
-        self.rescale(active_asg, inactive_asg)
-
-        self.log_new_asg_name(inactive_asg)
-
     def refresh_asg(self, asg):
         """
         UNUSED CODE
@@ -432,3 +404,31 @@ class ASG():
                 healthy_instances.append(i)
 
         return healthy_instances
+
+    def main(self, ami, asg=None, loadbalancer=None, target_group=None):
+        """
+        Calls necessary methods to perform an update:
+
+        1. Figures out which ASGs are active and inactive
+        2. Creates new launch template version with AMI set to [ami]
+        3. Scales inactive ASG down, then back up using the new launch template version
+        """
+
+        asg_liveness_info = self.asgs_by_liveness(asg=asg, loadbalancer=loadbalancer, target_group=target_group)
+
+        inactive_asg = asg_liveness_info['inactive_asg']
+        active_asg = asg_liveness_info['active_asg']
+        new_ami = ami
+
+        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
+
+        updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
+        self.set_asg_launch_template_version(
+            asg=inactive_asg,
+            lt_id=updated_lt["id"],
+            lt_version=updated_lt["version"]
+        )
+
+        self.rescale(active_asg, inactive_asg)
+
+        self.log_new_asg_name(inactive_asg)
