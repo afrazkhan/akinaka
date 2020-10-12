@@ -64,7 +64,7 @@ class TargetGroup():
 
         return {'active_asg': active_asg, 'inactive_asg': inactive_asg}
 
-    def switch_asg(self, scale_down_inactive=False):
+    def main(self, scale_down_inactive=False):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
         elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
@@ -77,7 +77,7 @@ class TargetGroup():
         inactive_asg_name = inactive_asg[0]['AutoScalingGroupName']
         active_asg_name = active_asg[0]['AutoScalingGroupName']
 
-        logging.debug("switch_asg(): asgs_by_status: {}, active_asg: {}, inactive_asg: {}".format(asgs_by_status, active_asg, inactive_asg))
+        logging.debug("main(): asgs_by_status: {}, active_asg: {}, inactive_asg: {}".format(asgs_by_status, active_asg, inactive_asg))
 
         # Exit program if there is no existing active auto scaling groups to perform a switch over
         if len(inactive_asg) < 1 or len(active_asg) < 1:

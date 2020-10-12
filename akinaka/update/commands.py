@@ -122,7 +122,7 @@ def targetgroup(ctx, new_asg_target, scale_down_inactive):
 
     try:
         target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target, log_level)
-        target_groups.switch_asg(scale_down_inactive)
+        target_groups.main(scale_down_inactive)
         # We've successfully deployed, so set the status of deploy to "false"
         set_deploy_status("stop", region, role_arn, target_groups.get_application_name())
         exit(0)
