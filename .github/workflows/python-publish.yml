@@ -6,7 +6,6 @@ name: Upload Python Package
 on:
   release:
     types: [created]
-  workflow_dispatch:
 
 jobs:
   pypi:
@@ -44,7 +43,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v2
         with:
-          build_args: AKINAKA_VERSION=$GITHUB_REF
+          build-args: AKINAKA_VERSION=$GITHUB_REF
           push: true
           tags: afrazkhan/akinaka:$GITHUB_REF
       - name: Image digest
