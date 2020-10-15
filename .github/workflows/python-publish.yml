@@ -48,3 +48,4 @@ jobs:
           tags: afrazkhan/akinaka:$GITHUB_REF
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
+    needs: pypi
