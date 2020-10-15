@@ -2,7 +2,6 @@
 
 from akinaka.client.aws_client import AWS_Client
 from akinaka.libs import exceptions
-from akinaka.libs import helpers
 import logging
 
 aws_client = AWS_Client()
