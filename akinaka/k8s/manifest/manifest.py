@@ -93,7 +93,7 @@ class Manifest():
                     image_parts = self.split_image_url(container['image'])
 
                     image = new_image or image_parts['image']
-                    tag = new_tag or image_parts['tag']
+                    tag = new_tag or image_parts['tag'] or 'latest'
 
                     container['image'] = f"{image_parts['repository']}/{image}:{tag}"
                 else:
@@ -116,5 +116,5 @@ class Manifest():
         This will work even if some parts such as port or tag are missing
         """
 
-        matches = re.match( r'^(?P<repository>[\w.\-_]+((?::\d+|)(?=/[a-z0-9._-]+/[a-z0-9._-]+))|)(?:/|)(?P<image>[a-z0-9.\-_]+(?:/[a-z0-9.\-_]+|))(:(?P<tag>[\w.\-_]{1,127})|)$', image, re.M )
+        matches = re.match( r'^(?P<name>(?:(?P<repository>(?:(?:localhost|[\w-]+(?:\.[\w-]+)+)(?::\d+)?)|[\w]+:\d+)/)?(?P<image>[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*))(?::(?P<tag>[\w][\w.-]{0,127}))?(?:@(?P<digest>[A-Za-z][A-Za-z0-9]*(?:[+._-][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,}))?$', image, re.M )
         return matches.groupdict()
