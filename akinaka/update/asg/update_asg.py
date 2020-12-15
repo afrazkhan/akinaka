@@ -2,10 +2,7 @@
 
 import sys
 from time import sleep
-from akinaka.libs import helpers
 from akinaka.libs import exceptions
-from botocore.exceptions import ParamValidationError
-from botocore.exceptions import ClientError
 from akinaka.client.aws_client import AWS_Client
 import logging
 
@@ -130,10 +127,7 @@ class ASG():
 
     def refresh_asg(self, asg):
         """
-        UNUSED CODE
-
-        Triggers and monitors an ASG refresh call of [asg]. This function is no longer used,
-        but kept since could be useful in some circumstances
+        Triggers and monitors an ASG refresh call of [asg]
 
         Returns True on success and False on failure
         """
@@ -143,8 +137,7 @@ class ASG():
         asg_client.start_instance_refresh(
             AutoScalingGroupName=asg,
             Preferences={
-                'MinHealthyPercentage': 0,
-                'InstanceWarmup': 0
+                'MinHealthyPercentage': 100
             }
         )
 
@@ -442,6 +435,8 @@ class ASG():
             lt_version=updated_lt["version"]
         )
 
-        self.rescale(active_asg, inactive_asg)
-
-        self.log_new_asg_name(inactive_asg)
+        if active_asg == inactive_asg:
+            self.refresh_asg(active_asg)
+        else:
+            self.rescale(active_asg, inactive_asg)
+            self.log_new_asg_name(inactive_asg)
