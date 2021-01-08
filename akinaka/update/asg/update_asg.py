@@ -125,12 +125,49 @@ class ASG():
 
         return True
 
+    def wait_for_clean_asg_refresh_status(self, asg, acceptable_statuses, timeout, fail_on_failure=False):
+        """
+        Go into a loop for a maximum of [timeout] seconds, waiting for the status
+        of the ASG refresh for [asg] to one of [acceptable_statuses]
+
+        Return {success: True, status: current_status} when one of [acceptable_statuses] was
+        received, and {success: False, status: current_status} when the [timeout] was reached,
+        or if [fail_on_failure=True] and receive a failure status. Default for [fail_on_failure]
+        is False, because the failure codes may be within [acceptable_statuses]
+        """
+
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+
+        time_count = 0
+        while True:
+            result = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
+            current_status = result['Status']
+
+            if current_status in acceptable_statuses:
+                return {'success': True, 'status': current_status}
+
+            if time_count >= timeout:
+                logging.info("Timeout reached")
+                return {'success': False, 'status': current_status}
+
+            if fail_on_failure and (current_status == 'Failed' or current_status == 'Cancelling'):
+                return {'success': False, 'status': current_status}
+
+            logging.info(f"\nCurrent Status: {result}\nTime counter: {time_count}")
+
+            time_count += 20
+            sleep(20)
+
     def refresh_asg(self, asg):
         """
         Triggers and monitors an ASG refresh call of [asg]
 
         Returns True on success and False on failure
         """
+
+        if not self.wait_for_clean_asg_refresh_status(asg, ['Successful', 'Cancelled', 'Failed'], 60)['success']:
+            logging.error("Timeout reached whilst waiting for ASG to become ready for another event. Try again later.")
+            return False
 
         logging.info(f"Starting instance refresh for ASG {asg}")
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
@@ -141,14 +178,11 @@ class ASG():
             }
         )
 
-        refresh_status = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
-        while refresh_status['Status'] != 'Successful':
-            logging.info(f"ASG refresh result:\n{refresh_status}\nNext poll in 20 seconds.")
-            refresh_status = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
-            if refresh_status['Status'] == 'Failed' or refresh_status['Status'] == 'Cancelling':
-                logging.error('The rollout failed, exiting. You must clean up the failed deploy manually')
-                return False
-            sleep(20)
+        cooldown_period = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])['AutoScalingGroups'][0]['DefaultCooldown']
+        timeout = cooldown_period + 300
+        if not self.wait_for_clean_asg_refresh_status(asg, ['Successful'], timeout, fail_on_failure=True)['success']:
+            logging.error("The rollout failed")
+            return False
 
         return True
 
