@@ -140,7 +140,11 @@ class ASG():
 
         time_count = 0
         while True:
-            result = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
+            try:
+                result = asg_client.describe_instance_refreshes(AutoScalingGroupName=asg)['InstanceRefreshes'][0]
+            except IndexError:
+                return {'success': True, 'status': 'NoPreviousDeploy'}
+
             current_status = result['Status']
 
             if current_status in acceptable_statuses:

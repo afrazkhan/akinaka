@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="akinaka",
-    version="0.8.1",
+    version="0.8.2",
     python_requires='>=3.3.0',
     author="Afraz",
     author_email="afrazkhan@gmail.com",
