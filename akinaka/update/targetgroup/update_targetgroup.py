@@ -31,7 +31,7 @@ class TargetGroup():
         wanted_asg_prefix = '-'.join(asg_split)
 
         for asg in asgs:
-            if wanted_asg_prefix in asg['AutoScalingGroupName']:
+            if wanted_asg_prefix == asg['AutoScalingGroupName'][:asg['AutoScalingGroupName'].rfind('-')]:
                 return_list.append(asg)
 
         logging.debug("filter_out_unwanted_asgs(): Wanted ASG prefix: {}, Return list: {}".format(wanted_asg_prefix, return_list))
