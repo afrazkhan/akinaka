@@ -63,6 +63,21 @@ class TargetGroup():
 
         return {'active_asg': active_asg, 'inactive_asg': inactive_asg}
 
+    def deregister_old_targets(self, instance_ids, target_group_arn):
+        """ Remove [instance_ids] from [target_group_arn] so the ASG can be detached """
+
+        elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+
+        targets = []
+
+        for this_instance_id in instance_ids:
+            targets.append({ 'Id': this_instance_id, 'Port': 443 })
+
+        elb_client.deregister_targets(
+            TargetGroupArn=target_group_arn,
+            Targets=targets
+        )
+
     def main(self, scale_down_inactive=False):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
@@ -118,6 +133,14 @@ class TargetGroup():
                 exit(1)
             else:
                 logging.info(f"All instances in new ASG {inactive_asg_name} reported as healthy")
+
+        # Get the instance IDs from the (old) active auto scaling group
+        old_asg_instances = []
+        for instance in active_asg[0]['Instances']:
+            old_asg_instances.append(dict(Id=instance['InstanceId']))
+
+        # Deregister old instances before detaching the old ASG
+        self.deregister_old_targets(old_asg_instances, target_group_arns[0])
 
         # Remove the asg from the target group
         logging.info(f"Detaching the {active_asg_name} ASG from the target group")
