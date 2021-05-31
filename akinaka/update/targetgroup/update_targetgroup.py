@@ -2,6 +2,7 @@
 
 from akinaka.client.aws_client import AWS_Client
 from akinaka.libs import exceptions
+import botocore.exceptions
 import logging
 
 aws_client = AWS_Client()
@@ -67,6 +68,7 @@ class TargetGroup():
         """ Remove [instance_ids] from [target_group_arn] so the ASG can be detached """
 
         elb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+        elb_waiter = elb_client.get_waiter('target_deregistered')
 
         targets = []
 
@@ -78,6 +80,17 @@ class TargetGroup():
             TargetGroupArn=target_group_arn,
             Targets=targets
         )
+
+        try:
+            elb_waiter.wait(
+                TargetGroupArn=target_group_arn,
+                Targets=targets
+            )
+        except botocore.exceptions.WaiterError as e:
+            logging.error(f"There was a problem deregistering instances:\n{e}")
+            exit(1)
+
+        logging.info("Successfully deregistered old ASG instances, moving on to detachment of the ASG itself")
 
     def main(self, scale_down_inactive=False):
         target_group_arns = []
