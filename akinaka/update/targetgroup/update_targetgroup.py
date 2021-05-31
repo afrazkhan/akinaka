@@ -166,7 +166,7 @@ class TargetGroup():
                     TargetGroupARNs=target_group_arns
                 )
         except Exception as e:
-            logging.error(f"Could not detach the old {inactive_asg} ASG from the {target_group_arns} target group!")
+            logging.error(f"Could not detach the old {active_asg_name} ASG from the {target_group_arns} target group!")
             logging.error(e)
             # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
             exit(1)
