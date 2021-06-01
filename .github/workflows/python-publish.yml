@@ -4,8 +4,9 @@
 name: Upload Python Package
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - '*'
 
 jobs:
   pypi:
@@ -27,6 +28,7 @@ jobs:
         run: |
           python setup.py sdist bdist_wheel
           twine upload dist/*
+          sleep 10
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -43,9 +45,9 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v2
         with:
-          build-args: AKINAKA_VERSION=${GITHUB_REF##*/}
+          build-args: AKINAKA_VERSION=${GITHUB_REF#refs/*/}
           push: true
-          tags: afrazkhan/akinaka:${GITHUB_REF##*/}
+          tags: afrazkhan/akinaka:${GITHUB_REF#refs/*/}
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
     needs: pypi
