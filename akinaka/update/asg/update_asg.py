@@ -190,11 +190,20 @@ class ASG():
 
         return True
 
-    def log_new_asg_name(self, new_asg_name):
-        """ Write [new_asg_name] to 'inactive_asg.txt' """
+    def log_new_asg_name(self, new_asg_name, environment, job_id):
+        """ Write [new_asg_name] to 'inactive_asg.txt' and an SSM parameter """
 
-        logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
+        logging.info(f"Logging inactive ASG name {new_asg_name} to 'inactive_asg.txt' and an SSM parameter")
         open("inactive_asg.txt", "w").write(new_asg_name)
+
+        ssm_client = aws_client.create_client('ssm', self.region, self.role_arn)
+        ssm_client.put_parameter(
+            Name=f"{environment}-old-asg-name",
+            Description=f"Updated by deploy number {job_id}",
+            Value=new_asg_name,
+            Type='String',
+            Overwrite=True
+        )
 
     def get_first_new_instance(self, new_asg):
         asg_instances = self.get_auto_scaling_group_instances(new_asg)
@@ -449,7 +458,7 @@ class ASG():
 
         return healthy_instances
 
-    def main(self, ami, asg=None, loadbalancer=None, target_group=None):
+    def main(self, ami, asg=None, loadbalancer=None, target_group=None, environment=None, job_id=None):
         """
         Calls necessary methods to perform an update:
 
@@ -464,7 +473,8 @@ class ASG():
         active_asg = asg_liveness_info['active_asg']
         new_ami = ami
 
-        logging.info("New ASG was worked out as {}. Now updating it's Launch Template".format(inactive_asg))
+        logging.info(f"New ASG was worked out as {inactive_asg}. Now updating it's Launch Template, and writing logging the name")
+        self.log_new_asg_name(inactive_asg, environment, job_id)
 
         updated_lt = self.update_launch_template(new_ami, self.get_lt_name(inactive_asg))
         self.set_asg_launch_template_version(
@@ -477,4 +487,4 @@ class ASG():
             self.refresh_asg(active_asg)
         else:
             self.rescale(active_asg, inactive_asg)
-            self.log_new_asg_name(inactive_asg)
+            logging.info("ASG fully healthy")
