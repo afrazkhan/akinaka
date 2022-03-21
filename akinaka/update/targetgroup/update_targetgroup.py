@@ -92,6 +92,62 @@ class TargetGroup():
 
         logging.info("Successfully deregistered old ASG instances, moving on to detachment of the ASG itself")
 
+    def get_asg_policies(self, asg):
+        """ Returns the scaling policies of [asg] """
+
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        response = asg_client.describe_policies(AutoScalingGroupName=asg)
+
+        return response
+
+    def add_traffic_asg_policy(self, asg, target_group_arn, requests=None):
+        """
+        Attaches a scaling policy to [asg] to maintain an average number of requests
+        of [requests] per instance
+        """
+
+        requests = requests or 50.0
+
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+        alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
+
+        load_balancer_target_group = asg_client.describe_load_balancer_target_groups(AutoScalingGroupName=asg)['LoadBalancerTargetGroups'][0]['LoadBalancerTargetGroupARN']
+        target_group_part = load_balancer_target_group.split((':')[-1])
+
+        load_balancers = alb_client.describe_target_groups(TargetGroupArns=[target_group_arn])['TargetGroups'][0]['LoadBalancerArns'][0]
+        load_balancer_part = load_balancers.split(':')[-1].replace('loadbalancer/', '')
+
+        resource_label = f"{load_balancer_part}/{target_group_part}"
+
+        try:
+            asg_client.put_scaling_policy(
+                AutoScalingGroupName=asg,
+                PolicyName='RequestScaling',
+                PolicyType='TargetTrackingScaling',
+                EstimatedInstanceWarmup=60,
+                TargetTrackingConfiguration={
+                  'PredefinedMetricSpecification': {
+                    'PredefinedMetricType': 'ALBRequestCountPerTarget',
+                    'ResourceLabel': resource_label
+                  },
+                  'TargetValue': float(requests),
+                  'DisableScaleIn': False
+                },
+                Enabled=True
+            )
+        except botocore.exceptions.ClientError as error:
+            if error.response['Error']['Code'] == 'ValidationError':
+                print(f"Couldn't add the scaling policy because: {error}")
+            else:
+                raise error
+
+    def remove_traffic_asg_policy(self, asg):
+        """ Remove the policy called "RequestScaling" added by self.add_traffic_asg_policy """
+
+        asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
+
+        asg_client.delete_policy( AutoScalingGroupName=asg, PolicyName='RequestScaling' )
+
     def main(self, scale_down_inactive=False):
         target_group_arns = []
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
@@ -148,6 +204,9 @@ class TargetGroup():
             else:
                 logging.info(f"All instances in new ASG {inactive_asg_name} reported as healthy")
 
+        # Add a policy to the new ASG to scale on traffic
+        self.add_traffic_asg_policy(inactive_asg, target_group_arns[0])
+
         # Get the instance IDs from the (old) active auto scaling group
         old_asg_instances = []
         for instance in active_asg[0]['Instances']:
@@ -156,6 +215,9 @@ class TargetGroup():
         # Deregister old instances before detaching the old ASG
         logging.info(f"Deregistering the following instances from the target group before detaching {active_asg_name}:\n{old_asg_instances}")
         self.deregister_old_targets(old_asg_instances, target_group_arns[0])
+
+        # We have to remove the traffic policy before removing the ASG
+        self.remove_traffic_asg_policy(active_asg)
 
         # Remove the asg from the target group
         logging.info(f"Detaching the {active_asg_name} ASG from the target group")
