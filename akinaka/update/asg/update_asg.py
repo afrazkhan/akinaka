@@ -4,11 +4,22 @@ import sys
 from time import sleep
 from akinaka.libs import exceptions
 from akinaka.client.aws_client import AWS_Client
+import botocore.exceptions
 import logging
+from pprint import pformat
 
 aws_client = AWS_Client()
 
-class ASG():
+
+def log_new_asg_name(new_asg_name):
+    """ Write [new_asg_name] to 'inactive_asg.txt' """
+
+    logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
+    with open("inactive_asg.txt", "w", encoding="utf8") as this_file:
+        this_file.write(new_asg_name)
+
+
+class ASG(): # pylint: disable=too-many-public-methods
     """All the methods needed to perform a blue/green deploy"""
 
     def __init__(self, region, role_arn, log_level):
@@ -103,6 +114,25 @@ class ASG():
         asg_info = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg])
         return asg_info['AutoScalingGroups'][0]['Instances']
 
+    def last_instance_loglines(self, instances: list, sleep_duration=None):
+        """ Returns a dict of { instance_id: log } containing the last log line for [instances] """
+
+        sleep_duration = sleep_duration or 0
+        logging.info(f"Sleeping for {sleep_duration}")
+        sleep(sleep_duration)
+        instance_loglines = {}
+        logs_client = aws_client.create_client('logs', self.region, self.role_arn)
+
+        try:
+            for this_instance in instances:
+                event_stream = logs_client.get_log_events(logGroupName='instance', logStreamName=f"cloud-init-output-{this_instance}")
+                last_log_line = [ this_event['message'] for this_event in event_stream['events'] ][-1]
+                instance_loglines[this_instance] = last_log_line
+        except botocore.exceptions.ClientError as error:
+            logging.error(f"{error} When trying to fetch the stream cloud-init-output-{this_instance} from the log group called 'instance'")
+
+        return instance_loglines
+
     def scale_waiter(self, asg, desired_scale, timeout=600):
         """
         Scales [asg] to [desired_scale] and waits [timeout] seconds for all instances
@@ -114,13 +144,26 @@ class ASG():
         max_attempts = timeout/20
         attempts = 0
 
-        while len(self.asg_instance_list(asg)) != desired_scale or (len(self.asgs_healthy_instances(asg)) < desired_scale and attempts != max_attempts):
+        while len(self.asg_instance_list(asg)) != desired_scale or (len(self.asgs_instances_by_lifecycle(asg)["in_service"]) < desired_scale and attempts != max_attempts):
             logging.info("Waiting for scaling event to finish successfully. Next poll in 20 seconds")
 
             sleep(20)
             attempts += 1
             if attempts == max_attempts:
+                out_of_service_info = self.asgs_instances_by_lifecycle(asg)["not_in_service"]
+                out_of_service_instances = [ this_instance['InstanceId'] for this_instance in out_of_service_info ]
+                last_instance_loglines = self.last_instance_loglines(out_of_service_instances, 5)
+
                 logging.info("Timeout reached without success whilst waiting for all instances to become healthy")
+                logging.info(f"""
+The following instances were never promoted to 'InService':
+
+{out_of_service_instances}
+
+Their last loglines (sleeping for 5 seconds first to give CloudWatch time to get them):
+
+{pformat(last_instance_loglines)}
+                """)
                 return False
 
         return True
@@ -190,15 +233,10 @@ class ASG():
 
         return True
 
-    def log_new_asg_name(self, new_asg_name):
-        """ Write [new_asg_name] to 'inactive_asg.txt' """
-
-        logging.info("ASG fully healthy. Logging new ASG name to \"inactive_asg.txt\"")
-        open("inactive_asg.txt", "w").write(new_asg_name)
-
     def get_first_new_instance(self, new_asg):
         asg_instances = self.get_auto_scaling_group_instances(new_asg)
-        if len(asg_instances) < 1: raise exceptions.AkinakaLoggingError
+        if len(asg_instances) < 1:
+            raise exceptions.AkinakaLoggingError
 
         return asg_instances[0]['InstanceId']
 
@@ -439,15 +477,19 @@ class ASG():
 
         return all(instance.get('LifecycleState') == 'Terminated' for instance in asg_instances)
 
-    def asgs_healthy_instances(self, auto_scaling_group_id):
+    def asgs_instances_by_lifecycle(self, auto_scaling_group_id):
+        """ Returns a dict of { (list)in_service, (list)not_in_service } """
+
         asg_instances = self.get_auto_scaling_group_instances(auto_scaling_group_id)
-        healthy_instances = []
+        instances_by_lifecycle = { "in_service": [], "not_in_service": [] }
 
         for i in asg_instances:
             if i['LifecycleState'] == "InService":
-                healthy_instances.append(i)
+                instances_by_lifecycle["in_service"].append(i)
+            else:
+                instances_by_lifecycle["not_in_service"].append(i)
 
-        return healthy_instances
+        return instances_by_lifecycle
 
     def main(self, ami, asg=None, loadbalancer=None, target_group=None):
         """
@@ -477,4 +519,4 @@ class ASG():
             self.refresh_asg(active_asg)
         else:
             self.rescale(active_asg, inactive_asg)
-            self.log_new_asg_name(inactive_asg)
+            log_new_asg_name(inactive_asg)
