@@ -10,10 +10,11 @@ aws_client = AWS_Client()
 class TargetGroup():
     """ TODO """
 
-    def __init__(self, region, role_arn, new_asg, log_level):
+    def __init__(self, region, role_arn, new_asg, traffic_policy_requests, log_level):
         self.region = region
         self.role_arn = role_arn
         self.new_asg = new_asg
+        self.traffic_policy_requests = traffic_policy_requests
         self.log_level = log_level
         logging.getLogger().setLevel(log_level)
 
@@ -121,13 +122,15 @@ class TargetGroup():
 
         return response
 
-    def add_traffic_asg_policy(self, asgs, target_group_arn, requests=None):
+    def add_traffic_asg_policy(self, asgs, target_group_arn, traffic_policy_requests=None):
         """
         Attaches a scaling policy to [asgs][*] to maintain an average number of requests
-        of [requests] per instance
+        of [traffic_policy_requests] per instance
         """
 
-        requests = requests or 50.0
+        traffic_policy_requests = traffic_policy_requests or 50.0
+        if traffic_policy_requests == 0: # Disable the traffic policy if we're passed 0 for requests
+            return True
 
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
         alb_client = aws_client.create_client('elbv2', self.region, self.role_arn)
@@ -156,7 +159,7 @@ class TargetGroup():
                         'PredefinedMetricType': 'ALBRequestCountPerTarget',
                         'ResourceLabel': resource_label
                       },
-                      'TargetValue': float(requests),
+                      'TargetValue': float(traffic_policy_requests),
                       'DisableScaleIn': False
                     },
                     Enabled=True
@@ -222,11 +225,13 @@ class TargetGroup():
             for tg in target_group_arns:
                 try:
                     elb_waiter.wait(TargetGroupArn=tg, Targets=asg_instances)
-                except Exception as e:
-                    logging.error("Some of them did not register as Healthy. Check/Detach them manually. Quiting")
-                    logging.error(e)
-                    # FIXME: Raise an exception.AkinakaCriticalException above instead of catching this
-                    exit(1)
+                except IndexError as e:
+                    logging.error(f"Some of them did not register as Healthy:\n{e}")
+                    logging.error(elb_client.describe_target_health(TargetGroupArn=tg, Targets=asg_instances))
+                    raise exceptions.AkinakaCriticalException("""
+                    New ASG instances failed during a deploy, you will need to decide whether you want
+                    to detach them. Please take a look at the pipelines right now
+                    """)
                 else:
                     logging.info(f"All instances in new ASG {asg_name} reported as healthy")
 
@@ -297,7 +302,7 @@ class TargetGroup():
             else:
                 logging.info(f"Scaled down {asg_name} to 0")
 
-    def main(self, scale_down_inactive=False):
+    def main(self, keep_old_asg=False):
         """
         Runs class methods needed to switch the target group over to [self.new_asg]
         """
@@ -327,7 +332,7 @@ class TargetGroup():
         self.wait_for_healthy_attachment(new_asgs, target_group_arns)
 
         # Add a policy to the new ASG to scale on traffic
-        self.add_traffic_asg_policy(new_asgs, target_group_arns[0])
+        self.add_traffic_asg_policy(new_asgs, target_group_arns[0], self.traffic_policy_requests)
 
         # De-register the (now old) current ASG targets
         self.deregister_targets(current_asgs, target_group_arns)
@@ -339,7 +344,7 @@ class TargetGroup():
         self.detatch_asg_from_target_group(current_asgs, target_group_arns)
 
         # Scale down the old (detached) ASG to 0/0/0
-        if scale_down_inactive:
+        if not keep_old_asg:
             self.scale_down_asg(current_asgs)
 
         return True

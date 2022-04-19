@@ -17,6 +17,9 @@ class AkinakaLoggingError(Exception):
 class AkinakaCriticalException(Exception):
     def __init__(self, message=None):
         super().__init__(message)
+
+        message = message or "Akinaka hit a critical exception, please check the pipelines now!"
+        helpers.alert(message)
         logging.error(message)
 
         exit(1)

@@ -1,6 +1,5 @@
 import click
 from akinaka.client.aws_client import AWS_Client
-from akinaka.libs import helpers
 from time import gmtime, strftime
 import logging
 import sys
@@ -26,7 +25,7 @@ def set_deploy_status(verb, region, role_arn, application, reset=None):
 
     aws_client = AWS_Client()
     ssm_client = aws_client.create_client('ssm', region, role_arn)
-    ssm_parameter_name = "deploying-status-{}".format(application)
+    ssm_parameter_name = f"deploying-status-{application}"
 
     try:
         deploying_state = ssm_client.get_parameter(Name=ssm_parameter_name)['Parameter']['Value']
@@ -107,8 +106,9 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
 @update.command()
 @click.pass_context
 @click.option("--new", "-n", "new_asg_target", help="The ASG we're switching the LB to (attaching this ASG to the LB's targetgroup)")
-@click.option("--scale-down-inactive", "-s", "scale_down_inactive", is_flag=True)
-def targetgroup(ctx, new_asg_target, scale_down_inactive):
+@click.option("--keep-old-asg", "-s", "keep_old_asg", is_flag=True)
+@click.option("--traffic-policy-requests", "-r", "traffic_policy_requests", default=0, help="How many requests each host should handle before scaling. Default value of 0 keeps this disabled")
+def targetgroup(ctx, new_asg_target, keep_old_asg, traffic_policy_requests):
     """
     Switch the load balancer to serve from a different ASG by attaching the new one and detaching the
     old one, from the target group
@@ -121,13 +121,13 @@ def targetgroup(ctx, new_asg_target, scale_down_inactive):
     from .targetgroup import update_targetgroup
 
     try:
-        target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target, log_level)
-        target_groups.main(scale_down_inactive)
+        target_groups = update_targetgroup.TargetGroup(region, role_arn, new_asg_target, traffic_policy_requests, log_level)
+        target_groups.main(keep_old_asg)
         # We've successfully deployed, so set the status of deploy to "false"
         set_deploy_status("stop", region, role_arn, target_groups.get_application_name())
         exit(0)
     except Exception as e:
-        logging.error("{}".format(e))
+        logging.error(f"{type(e).__name__}: {e}")
         exit(1)
 
 @update.command()

@@ -3,3 +3,6 @@ datetime
 click
 tabulate
 pyyaml
+kubernetes
+slack_sdk
+messagebird
