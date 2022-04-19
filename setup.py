@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="akinaka",
-    version="0.9.1",
+    version="1.0.0",
     python_requires='>=3.3.0',
     author="Afraz",
     author_email="afrazkhan@gmail.com",
@@ -25,7 +25,9 @@ setuptools.setup(
         'datetime',
         'click',
         'pyyaml',
-        'kubernetes'
+        'kubernetes',
+        'slack_sdk',
+        'messagebird'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
