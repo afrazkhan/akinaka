@@ -107,7 +107,7 @@ def asg(ctx, ami, lb, asg_name, target_group, skip_status_check):
 @click.pass_context
 @click.option("--new", "-n", "new_asg_target", help="The ASG we're switching the LB to (attaching this ASG to the LB's targetgroup)")
 @click.option("--keep-old-asg", "-s", "keep_old_asg", is_flag=True)
-@click.option("--traffic-policy-requests", "-r", "traffic_policy_requests", default=0, help="How many requests each host should handle before scaling. Default value of 0 keeps this disabled")
+@click.option("--traffic-policy-requests", "-r", "traffic_policy_requests", default='disabled', help="How many requests each host should handle before scaling. Default value keeps this disabled")
 def targetgroup(ctx, new_asg_target, keep_old_asg, traffic_policy_requests):
     """
     Switch the load balancer to serve from a different ASG by attaching the new one and detaching the

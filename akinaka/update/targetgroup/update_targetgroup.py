@@ -129,7 +129,8 @@ class TargetGroup():
         """
 
         traffic_policy_requests = traffic_policy_requests or 50.0
-        if traffic_policy_requests == 0: # Disable the traffic policy if we're passed 0 for requests
+        if traffic_policy_requests is "disabled": # Disable the traffic policy if we're passed 0 for requests
+            logging.info("Not added traffic scaling policy because value for 'traffic_policy_requests' was 0")
             return True
 
         asg_client = aws_client.create_client('autoscaling', self.region, self.role_arn)
